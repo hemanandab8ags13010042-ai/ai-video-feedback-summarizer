@@ -1,0 +1,71 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const path = require('path');
+const fs = require('fs');
+
+const db = require('./config/db');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Middleware
+app.use(cors({
+  origin: '*', // Allow frontend connection during dev
+  credentials: true
+}));
+app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve local uploads folder statically
+const uploadsPath = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsPath));
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const projectRoutes = require('./routes/projects');
+const feedbackRoutes = require('./routes/feedback');
+const taskRoutes = require('./routes/tasks');
+const dashboardRoutes = require('./routes/dashboard');
+const reportRoutes = require('./routes/reports');
+const videoRoutes = require('./routes/videos');
+const reviewRoutes = require('./routes/reviews');
+
+// Apply routing endpoints
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/feedback', feedbackRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/videos', videoRoutes);
+app.use('/api/reviews', reviewRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date(),
+    database: db.getIsMySQL() ? 'MySQL' : 'SQLite fallback'
+  });
+});
+
+// Start Server & DB
+async function startServer() {
+  try {
+    await db.initDB();
+    app.listen(PORT, () => {
+      console.log(`🚀 AI Video Feedback Summarizer Backend running on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error('❌ Failed to initialize database or start backend:', err.message);
+    process.exit(1);
+  }
+}
+
+startServer();

@@ -1,0 +1,188 @@
+const db = require('../config/db');
+
+/**
+ * Create a new project
+ */
+async function createProject(req, res) {
+  const { name, client_name, video_type, deadline, priority, status } = req.body;
+
+  if (!name || !client_name || !video_type || !deadline) {
+    return res.status(400).json({ error: 'Missing required project fields.' });
+  }
+
+  try {
+    const projPriority = priority || 'medium';
+    const projStatus = status || 'draft';
+
+    const result = await db.query(
+      'INSERT INTO projects (name, client_name, video_type, deadline, priority, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, client_name, video_type, deadline, projPriority, projStatus]
+    );
+
+    const projectId = result.insertId;
+
+    // Log activity
+    await db.query(
+      'INSERT INTO activity_logs (project_id, user_id, activity_type, description) VALUES (?, ?, ?, ?)',
+      [projectId, req.user.id, 'PROJECT_CREATION', `Project "${name}" was created.`]
+    );
+
+    res.status(201).json({
+      message: 'Project created successfully',
+      project: { id: projectId, name, client_name, video_type, deadline, priority: projPriority, status: projStatus }
+    });
+  } catch (err) {
+    console.error('Create Project Error:', err.message);
+    res.status(500).json({ error: 'Failed to create project.' });
+  }
+}
+
+/**
+ * Fetch all projects (Scoped by user role)
+ */
+async function getProjects(req, res) {
+  try {
+    let projects;
+    // Clients only see their own projects
+    if (req.user.role === 'client') {
+      // Find projects where the client_name matches the client's user name
+      projects = await db.query('SELECT * FROM projects WHERE client_name = ? ORDER BY deadline ASC', [req.user.name]);
+    } else {
+      // Studio staff see all projects
+      projects = await db.query('SELECT * FROM projects ORDER BY deadline ASC');
+    }
+    res.json(projects);
+  } catch (err) {
+    console.error('Get Projects Error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve projects.' });
+  }
+}
+
+/**
+ * Fetch a single project by ID with all related feedback, tasks, history, and activity logs
+ */
+async function getProjectById(req, res) {
+  const projectId = req.params.id;
+
+  try {
+    const projects = await db.query('SELECT * FROM projects WHERE id = ?', [projectId]);
+    if (projects.length === 0) {
+      return res.status(404).json({ error: 'Project not found.' });
+    }
+
+    const project = projects[0];
+
+    // Security check: Clients can only access their own project
+    if (req.user.role === 'client' && project.client_name !== req.user.name) {
+      return res.status(403).json({ error: 'Access denied to this project.' });
+    }
+
+    // Get feedback list
+    const feedback = await db.query(
+      'SELECT f.*, u.name as submitter_name FROM feedback f INNER JOIN users u ON f.user_id = u.id WHERE f.project_id = ? ORDER BY f.created_at DESC',
+      [projectId]
+    );
+
+    // Get tasks list (with assignee name)
+    const tasks = await db.query(
+      'SELECT t.*, u.name as assignee_name FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id WHERE t.project_id = ? ORDER BY t.created_at DESC',
+      [projectId]
+    );
+
+    // Get AI Results
+    const aiResults = await db.query(
+      'SELECT * FROM ai_results WHERE project_id = ? ORDER BY created_at DESC',
+      [projectId]
+    );
+
+    // Get Activity Logs
+    const activityLogs = await db.query(
+      'SELECT l.*, u.name as user_name FROM activity_logs l INNER JOIN users u ON l.user_id = u.id WHERE l.project_id = ? ORDER BY l.created_at DESC',
+      [projectId]
+    );
+
+    // Parse JSON lists in AI Results for UI convenience
+    const processedAiResults = aiResults.map(ai => {
+      try {
+        return {
+          ...ai,
+          action_items: ai.action_items ? JSON.parse(ai.action_items) : [],
+          editing_tasks: ai.editing_tasks ? JSON.parse(ai.editing_tasks) : [],
+          vfx_tasks: ai.vfx_tasks ? JSON.parse(ai.vfx_tasks) : [],
+          checklist: ai.checklist ? JSON.parse(ai.checklist) : [],
+          suggestions: ai.suggestions ? JSON.parse(ai.suggestions) : []
+        };
+      } catch (e) {
+        return ai;
+      }
+    });
+
+    res.json({
+      project,
+      feedback,
+      tasks,
+      aiResults: processedAiResults,
+      activityLogs
+    });
+
+  } catch (err) {
+    console.error('Get Project Details Error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve project details.' });
+  }
+}
+
+/**
+ * Update project status or details (PM/Admin only)
+ */
+async function updateProject(req, res) {
+  const projectId = req.params.id;
+  const { name, client_name, video_type, deadline, priority, status } = req.body;
+
+  try {
+    const existing = await db.query('SELECT * FROM projects WHERE id = ?', [projectId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Project not found.' });
+    }
+
+    const current = existing[0];
+    const newName = name || current.name;
+    const newClient = client_name || current.client_name;
+    const newType = video_type || current.video_type;
+    const newDeadline = deadline || current.deadline;
+    const newPriority = priority || current.priority;
+    const newStatus = status || current.status;
+
+    await db.query(
+      'UPDATE projects SET name = ?, client_name = ?, video_type = ?, deadline = ?, priority = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [newName, newClient, newType, newDeadline, newPriority, newStatus, projectId]
+    );
+
+    // Trigger Notification for completion if applicable
+    if (newStatus === 'completed' && current.status !== 'completed') {
+      const { triggerProjectCompletedAlert } = require('../services/notificationService');
+      await triggerProjectCompletedAlert(projectId, newName);
+    }
+
+    // Log Activity
+    await db.query(
+      'INSERT INTO activity_logs (project_id, user_id, activity_type, description) VALUES (?, ?, ?, ?)',
+      [projectId, req.user.id, 'PROJECT_UPDATE', `Project details updated. Status: "${newStatus}".`]
+    );
+
+    res.json({
+      message: 'Project updated successfully',
+      project: { id: projectId, name: newName, client_name: newClient, video_type: newType, deadline: newDeadline, priority: newPriority, status: newStatus }
+    });
+
+  } catch (err) {
+    console.error('Update Project Error:', err.message);
+    res.status(500).json({ error: 'Failed to update project.' });
+  }
+}
+
+module.exports = {
+  createProject,
+  getProjects,
+  getProjectById,
+  updateProject
+};
