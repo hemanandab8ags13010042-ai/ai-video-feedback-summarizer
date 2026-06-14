@@ -142,8 +142,12 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
   if (geminiClient) {
     try {
       const model = geminiClient.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      // Filter history to ensure it starts with a 'user' message as required by the Gemini API
+      const firstUserIndex = chatHistory.findIndex(msg => msg.role === 'user');
+      const validHistory = firstUserIndex !== -1 ? chatHistory.slice(firstUserIndex) : [];
+
       const chat = model.startChat({
-        history: chatHistory.map(msg => ({
+        history: validHistory.map(msg => ({
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }]
         })),
