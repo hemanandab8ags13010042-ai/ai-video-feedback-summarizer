@@ -186,9 +186,8 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       return result.choices[0].message.content;
     } catch (err) {
       console.error('OpenAI chatbot error:', err);
-      if (geminiClient) {
-        return `⚠️ **AI Service Failure:** Both Gemini and OpenAI APIs failed to respond. Please check your credentials and quota limits.`;
-      }
+      const openAiError = err.message || err.toString();
+      return `⚠️ **AI Service Failure:** Both Gemini and OpenAI APIs failed to respond.\n\n* **Gemini**: Rate limit or quota limit exceeded.\n* **OpenAI**: ${openAiError}\n\n*(Please check your billing details and key status.)*`;
     }
   }
 
