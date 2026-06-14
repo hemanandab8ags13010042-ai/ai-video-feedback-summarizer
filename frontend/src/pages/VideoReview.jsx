@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { videoService, reviewService, feedbackService } from '../services/api';
+import { videoService, reviewService, feedbackService, BASE_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -571,7 +571,7 @@ export default function VideoReview() {
               <div className="relative aspect-video w-full overflow-hidden flex items-center justify-center">
                 <video
                   ref={videoRef}
-                  src={version?.file_url.startsWith('http') ? version.file_url : `http://localhost:5000${version.file_url}`}
+                  src={version?.file_url.startsWith('http') ? version.file_url : `${BASE_URL}${version.file_url}`}
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={handleLoadedMetadata}
                   onClick={handlePlayPause}
@@ -891,7 +891,7 @@ export default function VideoReview() {
                           <div className="mt-2.5 p-2 rounded bg-slate-500/5 flex flex-col gap-1 text-[10px]">
                             <audio 
                               controls 
-                              src={c.voice_audio_url.startsWith('http') ? c.voice_audio_url : `http://localhost:5000${c.voice_audio_url}`} 
+                              src={c.voice_audio_url.startsWith('http') ? c.voice_audio_url : `${BASE_URL}${c.voice_audio_url}`} 
                               className="w-full h-5 accent-cyan-400"
                             />
                             <span className="text-[9px] text-slate-500 italic">"Transcript: {c.voice_transcript}"</span>

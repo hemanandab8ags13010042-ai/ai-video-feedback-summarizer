@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { projectService, feedbackService, taskService } from '../services/api';
+import { projectService, feedbackService, taskService, BASE_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -472,7 +472,7 @@ export default function ProjectDetails() {
                           <div className="flex items-center gap-1.5 p-2 rounded bg-slate-500/5 mt-2 text-[10px]">
                             {feed.type === 'voice' ? <Mic className="w-3.5 h-3.5 text-cyan-400" /> : <FileText className="w-3.5 h-3.5 text-yellow-500" />}
                             <a 
-                              href={feed.file_url.startsWith('http') ? feed.file_url : `http://localhost:5000${feed.file_url}`} 
+                              href={feed.file_url.startsWith('http') ? feed.file_url : `${BASE_URL}${feed.file_url}`} 
                               target="_blank" 
                               rel="noreferrer"
                               className="text-cyan-400 hover:underline truncate max-w-[150px] font-bold"

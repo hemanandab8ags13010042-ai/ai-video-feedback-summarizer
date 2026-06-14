@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { feedbackService, projectService } from '../services/api';
+import { feedbackService, projectService, BASE_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -236,7 +236,7 @@ export default function HistoryPage() {
                               Media file
                             </span>
                             <a 
-                              href={item.file_url.startsWith('http') ? item.file_url : `http://localhost:5000${item.file_url}`}
+                              href={item.file_url.startsWith('http') ? item.file_url : `${BASE_URL}${item.file_url}`}
                               target="_blank"
                               rel="noreferrer"
                               className="text-cyan-400 font-bold hover:underline flex items-center gap-0.5"
