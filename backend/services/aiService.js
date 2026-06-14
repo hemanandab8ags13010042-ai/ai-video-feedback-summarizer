@@ -144,7 +144,7 @@ ${teamListStr || 'None (make generic suggestions)'}
       }
       
       const response = await groqClient.chat.completions.create({
-        model: 'llama3-8b-8192',
+        model: 'llama-3.1-8b-instant',
         messages: [{ role: 'user', content: promptText }],
         response_format: { type: 'json_object' }
       });
@@ -216,7 +216,7 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
         { role: 'user', content: userMessage }
       ];
       const result = await groqClient.chat.completions.create({
-        model: 'llama3-8b-8192',
+        model: 'llama-3.1-8b-instant',
         messages
       });
       return result.choices[0].message.content;
