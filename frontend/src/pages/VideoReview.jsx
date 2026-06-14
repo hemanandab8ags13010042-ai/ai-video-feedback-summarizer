@@ -511,7 +511,7 @@ export default function VideoReview() {
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         
         {/* Header version selector / decision buttons */}
-        <header className={`h-16 flex items-center justify-between px-8 border-b flex-shrink-0 z-20 ${
+        <header className={`h-16 flex items-center justify-between px-4 sm:px-8 pl-16 sm:pl-8 border-b flex-shrink-0 z-20 ${
           isDark ? 'border-slate-800 bg-[#161D30]/95 backdrop-blur-md' : 'border-slate-200 bg-white/90 backdrop-blur-md'
         }`}>
           <div className="flex items-center gap-4">
@@ -566,10 +566,10 @@ export default function VideoReview() {
         </header>
 
         {/* Dynamic Frame.io double panel layout */}
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
           
           {/* Left panel: player, canvas controls, comment submissions */}
-          <div className="flex-1 flex flex-col overflow-y-auto p-8 space-y-6">
+          <div className="flex-1 flex flex-col p-4 sm:p-8 space-y-6 overflow-y-visible lg:overflow-y-auto">
             
             {/* Custom Video Player workspace */}
             <div className={`rounded-xl border overflow-hidden relative group/player flex flex-col ${
@@ -853,7 +853,7 @@ export default function VideoReview() {
           </div>
 
           {/* Right panel: Tab sheets for comments, summary and chatbot */}
-          <div className={`w-96 flex-shrink-0 border-l flex flex-col justify-between ${
+          <div className={`w-full lg:w-96 min-h-[500px] lg:min-h-0 border-t lg:border-t-0 lg:border-l flex flex-col justify-between ${
             isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200 shadow-xl'
           }`}>
             

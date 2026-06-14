@@ -173,7 +173,7 @@ export default function ProjectDetails() {
       <main className="flex-1 flex flex-col overflow-y-auto min-w-0 relative">
         
         {/* Workspace Header */}
-        <header className={`h-16 flex items-center justify-between px-8 border-b flex-shrink-0 sticky top-0 z-20 ${
+        <header className={`h-16 flex items-center justify-between px-4 sm:px-8 pl-16 sm:pl-8 border-b flex-shrink-0 sticky top-0 z-20 ${
           isDark ? 'border-slate-800 bg-[#161D30]/90 backdrop-blur-md' : 'border-slate-200 bg-white/90 backdrop-blur-md'
         }`}>
           <div className="flex items-center gap-4">
@@ -208,7 +208,7 @@ export default function ProjectDetails() {
         </header>
 
         {/* Content Workspace Area */}
-        <div className="p-8 space-y-8 max-w-6xl w-full mx-auto pb-24">
+        <div className="p-4 sm:p-8 space-y-8 max-w-6xl w-full mx-auto pb-24">
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             

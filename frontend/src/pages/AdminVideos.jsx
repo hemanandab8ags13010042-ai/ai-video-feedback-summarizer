@@ -171,7 +171,7 @@ export default function AdminVideos() {
       <main className="flex-1 flex flex-col overflow-y-auto min-w-0">
         
         {/* Header */}
-        <header className={`h-16 flex items-center justify-between px-8 border-b flex-shrink-0 sticky top-0 z-10 ${
+        <header className={`h-16 flex items-center justify-between px-4 sm:px-8 pl-16 sm:pl-8 border-b flex-shrink-0 sticky top-0 z-10 ${
           isDark ? 'border-slate-800 bg-[#161D30]/95 backdrop-blur-md' : 'border-slate-200 bg-white/95 backdrop-blur-md'
         }`}>
           <div>
@@ -191,7 +191,7 @@ export default function AdminVideos() {
         </header>
 
         {/* Grid panel */}
-        <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl w-full mx-auto pb-24">
+        <div className="p-4 sm:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl w-full mx-auto pb-24">
           
           {/* Left: Upload Form */}
           <div className="space-y-6">

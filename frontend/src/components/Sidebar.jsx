@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { 
   LayoutDashboard, Kanban, BarChart3, History, LogOut, 
-  Video, Sun, Moon, ShieldAlert, UserCheck 
+  Video, Sun, Moon, ShieldAlert, UserCheck, Menu, X
 } from 'lucide-react';
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
+
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -38,9 +40,35 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className={`w-64 flex-shrink-0 flex flex-col justify-between border-r transition-colors duration-200 ${
-      isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200'
-    }`}>
+    <>
+      {/* Floating Toggle Button - Visible only on mobile/tablet */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`fixed top-3 left-4 z-50 p-2.5 rounded-lg border lg:hidden transition-all duration-200 ${
+          isDark 
+            ? 'border-slate-800 bg-[#161D30] text-slate-300 hover:bg-slate-800' 
+            : 'border-slate-250 bg-white text-slate-600 hover:bg-slate-100 shadow-sm'
+        }`}
+        aria-label="Toggle Navigation Menu"
+      >
+        {isOpen ? <X className="w-4.5 h-4.5" /> : <Menu className="w-4.5 h-4.5" />}
+      </button>
+
+      {/* Backdrop overlay - Visible only on mobile/tablet when open */}
+      {isOpen && (
+        <div 
+          onClick={() => setIsOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
+        />
+      )}
+
+      {/* Sidebar Panel */}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-40 w-64 flex-shrink-0 flex flex-col justify-between border-r transition-transform duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      } ${
+        isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200'
+      }`}>
       
       {/* Upper Area */}
       <div className="flex flex-col">
@@ -122,6 +150,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-    </aside>
+      </aside>
+    </>
   );
 }

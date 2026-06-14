@@ -196,7 +196,7 @@ export default function Dashboard() {
       <main className="flex-1 flex flex-col overflow-y-auto min-w-0">
         
         {/* Top Header */}
-        <header className={`h-16 flex items-center justify-between px-8 border-b flex-shrink-0 ${
+        <header className={`h-16 flex items-center justify-between px-4 sm:px-8 pl-16 sm:pl-8 border-b flex-shrink-0 ${
           isDark ? 'border-slate-800 bg-[#161D30]/50' : 'border-slate-200 bg-white'
         }`}>
           <div>
@@ -228,7 +228,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Grid */}
-        <div className="p-8 space-y-8 max-w-7xl w-full mx-auto">
+        <div className="p-4 sm:p-8 space-y-8 max-w-7xl w-full mx-auto">
           
           {/* Stats Bar */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
