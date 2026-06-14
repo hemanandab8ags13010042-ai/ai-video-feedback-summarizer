@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { 
   Play, Pause, Volume2, Maximize, Clock, User, Check, Sparkles,
   ArrowLeft, Send, Trash2, Edit3, MessageSquare, Mic, Disc, Square,
-  CheckCircle, AlertCircle, RefreshCw, ChevronDown, Award, HelpCircle, Upload
+  CheckCircle, AlertCircle, RefreshCw, ChevronDown, Award, HelpCircle
 } from 'lucide-react';
 
 export default function VideoReview() {
@@ -50,7 +50,6 @@ export default function VideoReview() {
   const [isVoiceRecording, setIsVoiceRecording] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState(null);
   const mediaRecorderRef = useRef(null);
-  const audioFileInputRef = useRef(null);
   const audioChunksRef = useRef([]);
 
   // AI analysis loader
@@ -380,14 +379,6 @@ export default function VideoReview() {
     if (mediaRecorderRef.current && isVoiceRecording) {
       mediaRecorderRef.current.stop();
       setIsVoiceRecording(false);
-    }
-  };
-
-  const handleAudioFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setVoiceBlob(file);
-      setNewComment(prev => prev || `[Audio file uploaded: ${file.name}]`);
     }
   };
 
@@ -812,27 +803,6 @@ export default function VideoReview() {
                         title="Record Voice note feedback"
                       >
                         {isVoiceRecording ? <Square className="w-4 h-4 fill-white" /> : <Mic className="w-4 h-4" />}
-                      </button>
-
-                      {/* Audio File Upload */}
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        ref={audioFileInputRef}
-                        onChange={handleAudioFileUpload}
-                        className="hidden"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => audioFileInputRef.current?.click()}
-                        className={`p-2 rounded-lg flex items-center justify-center transition-colors ${
-                          voiceBlob && !(voiceBlob instanceof Blob && !voiceBlob.name)
-                            ? 'bg-violet-600 text-white shadow-lg' 
-                            : isDark ? 'bg-[#0B0F19] hover:bg-slate-800 text-slate-400' : 'bg-slate-50 hover:bg-slate-100 text-slate-600'
-                        }`}
-                        title="Upload audio feedback file"
-                      >
-                        <Upload className="w-4 h-4" />
                       </button>
                       
                     </div>
