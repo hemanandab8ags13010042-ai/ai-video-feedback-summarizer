@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: '*', // Allow frontend connection during dev
+  origin: true, // Dynamically reflect origin to support credentials
   credentials: true
 }));
 app.use(morgan('dev'));
