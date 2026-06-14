@@ -32,14 +32,7 @@ export default function ProjectDetails() {
   const [analysisStep, setAnalysisStep] = useState(1);
   const fileInputRef = useRef(null);
 
-  // Chatbot states
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatHistory, setChatHistory] = useState([
-    { role: 'assistant', content: 'Hi there! I am your DigiQuest Studio production assistant. Ask me anything about this project or how we should address the client feedback!' }
-  ]);
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatEndRef = useRef(null);
+
 
   // Load all project details
   const fetchProjectData = async () => {
@@ -64,11 +57,7 @@ export default function ProjectDetails() {
     init();
   }, [id]);
 
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatHistory, isChatOpen]);
+
 
   // Drag-and-drop actions
   const handleDrag = (e) => {
@@ -130,25 +119,7 @@ export default function ProjectDetails() {
     }
   };
 
-  // AI chatbot message submit
-  const handleSendChatMessage = async (e) => {
-    e.preventDefault();
-    if (!chatMessage.trim()) return;
 
-    const userMsg = { role: 'user', content: chatMessage };
-    setChatHistory(prev => [...prev, userMsg]);
-    setChatMessage('');
-    setChatLoading(true);
-
-    try {
-      const response = await feedbackService.chat(chatMessage, chatHistory, id);
-      setChatHistory(prev => [...prev, { role: 'assistant', content: response.reply }]);
-    } catch (err) {
-      setChatHistory(prev => [...prev, { role: 'assistant', content: 'Sorry, I failed to connect to the assistant engine. Please try again.' }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -199,7 +170,7 @@ export default function ProjectDetails() {
           </div>
 
           <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
+            onClick={() => window.dispatchEvent(new Event('toggle-ai-chat'))}
             className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-violet-500/10 transition-colors"
           >
             <MessageSquare className="w-4 h-4" />
@@ -559,74 +530,7 @@ export default function ProjectDetails() {
           </div>
         )}
 
-        {/* AI CHATBOT SIDEBAR DRAWER */}
-        {isChatOpen && (
-          <div className={`fixed inset-y-0 right-0 z-40 w-96 border-l shadow-2xl flex flex-col justify-between ${
-            isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200'
-          }`}>
-            {/* Header */}
-            <div className="h-16 flex items-center justify-between px-6 border-b border-slate-800/20">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4.5 h-4.5 text-violet-400" />
-                <span className="font-bold text-sm">DigiQuest Studio Assistant</span>
-              </div>
-              <button 
-                onClick={() => setIsChatOpen(false)}
-                className={`p-1 rounded hover:bg-slate-500/10 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}
-              >
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
 
-            {/* Messages body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {chatHistory.map((msg, i) => (
-                <div 
-                  key={i} 
-                  className={`flex gap-2.5 max-w-[85%] text-xs leading-normal p-3 rounded-lg ${
-                    msg.role === 'user' 
-                      ? 'bg-violet-600 text-white ml-auto' 
-                      : isDark ? 'bg-[#0B0F19] text-slate-200' : 'bg-slate-150 text-slate-800'
-                  }`}
-                >
-                  {msg.role !== 'user' && <Sparkles className="w-4.5 h-4.5 text-violet-400 flex-shrink-0 mt-0.5" />}
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
-                </div>
-              ))}
-              
-              {chatLoading && (
-                <div className={`flex gap-2.5 max-w-[85%] text-xs leading-normal p-3 rounded-lg mr-auto ${
-                  isDark ? 'bg-[#0B0F19] text-slate-400' : 'bg-slate-150 text-slate-500'
-                }`}>
-                  <Sparkles className="w-4.5 h-4.5 text-violet-400 animate-spin" />
-                  <span>Thinking...</span>
-                </div>
-              )}
-              
-              <div ref={chatEndRef} />
-            </div>
-
-            {/* Input form */}
-            <form onSubmit={handleSendChatMessage} className="p-4 border-t border-slate-800/20 flex gap-2">
-              <input
-                type="text"
-                placeholder="Ask assistant about edit details..."
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                className={`flex-1 px-3 py-2 rounded-lg border text-xs focus:outline-none focus:border-violet-500 ${
-                  isDark ? 'bg-[#0B0F19] border-slate-800' : 'bg-slate-50 border-slate-200'
-                }`}
-              />
-              <button
-                type="submit"
-                disabled={chatLoading}
-                className="p-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white flex items-center justify-center shadow-lg"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
-        )}
 
       </main>
 
