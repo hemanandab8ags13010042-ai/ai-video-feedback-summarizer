@@ -1,11 +1,14 @@
 const { GoogleGenAI } = require('@google/generative-ai');
 const { OpenAI } = require('openai');
+const Groq = require('groq-sdk');
 
 const geminiKey = process.env.GEMINI_API_KEY;
 const openaiKey = process.env.OPENAI_API_KEY;
+const groqKey = process.env.GROQ_API_KEY;
 
 let geminiClient = null;
 let openaiClient = null;
+let groqClient = null;
 
 if (geminiKey) {
   // Use the standard client initialization
@@ -17,7 +20,11 @@ if (openaiKey) {
   openaiClient = new OpenAI({ apiKey: openaiKey });
   console.log('✅ OpenAI API client initialized.');
 }
-if (!geminiKey && !openaiKey) {
+if (groqKey) {
+  groqClient = new Groq({ apiKey: groqKey });
+  console.log('✅ Groq API client initialized.');
+}
+if (!geminiKey && !openaiKey && !groqKey) {
   console.log('ℹ️ No AI API keys found. Using Mock AI processing.');
 }
 
@@ -124,7 +131,26 @@ ${teamListStr || 'None (make generic suggestions)'}
       });
       return JSON.parse(response.choices[0].message.content);
     } catch (err) {
-      console.error('OpenAI Analysis error, falling back to mock:', err);
+      console.error('OpenAI Analysis error, trying fallback to Groq if configured:', err);
+    }
+  }
+
+  // 3. Groq Implementation
+  if (groqClient) {
+    try {
+      let promptText = `${systemPrompt}\n\nClient input text/transcript:\n${textData || ''}`;
+      if (fileBuffer) {
+        promptText += `\n[Attached file content exists in buffer - analyzing metadata: size=${fileBuffer.length} bytes, type=${fileMimeType}]`;
+      }
+      
+      const response = await groqClient.chat.completions.create({
+        model: 'llama3-8b-8192',
+        messages: [{ role: 'user', content: promptText }],
+        response_format: { type: 'json_object' }
+      });
+      return JSON.parse(response.choices[0].message.content);
+    } catch (err) {
+      console.error('Groq Analysis error, falling back to mock:', err);
     }
   }
 
@@ -177,11 +203,29 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       });
       return result.choices[0].message.content;
     } catch (err) {
-      console.error('OpenAI chatbot error, falling back to mock:', err);
+      console.error('OpenAI chatbot error, trying fallback to Groq if configured:', err);
     }
   }
 
-  // 3. Fallback Mock Implementation
+  // 3. Groq Chatbot Implementation
+  if (groqClient) {
+    try {
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        ...chatHistory,
+        { role: 'user', content: userMessage }
+      ];
+      const result = await groqClient.chat.completions.create({
+        model: 'llama3-8b-8192',
+        messages
+      });
+      return result.choices[0].message.content;
+    } catch (err) {
+      console.error('Groq chatbot error, falling back to mock:', err);
+    }
+  }
+
+  // 4. Fallback Mock Implementation
   return generateMockChatResponse(userMessage);
 }
 
