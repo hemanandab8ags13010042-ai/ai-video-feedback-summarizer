@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function LandingPage() {
   const { isDark, toggleTheme } = useTheme();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const [activeFaq, setActiveFaq] = useState(null);
 
@@ -69,10 +69,12 @@ export default function LandingPage() {
 
           <div className="hidden md:flex items-center gap-8 text-sm font-medium">
             <a href="#features" className="hover:text-violet-400 transition-colors">Features</a>
-            {isAuthenticated ? (
-              <Link to="/dashboard" className="hover:text-violet-400 transition-colors">Workspace</Link>
-            ) : (
-              <Link to="/login" className="hover:text-violet-400 transition-colors">Sign In</Link>
+            {!loading && (
+              isAuthenticated ? (
+                <Link to="/dashboard" className="hover:text-violet-400 transition-colors">Workspace</Link>
+              ) : (
+                <Link to="/login" className="hover:text-violet-400 transition-colors">Sign In</Link>
+              )
             )}
             <a href="#pricing" className="hover:text-violet-400 transition-colors">Pricing</a>
             <a href="#faq" className="hover:text-violet-400 transition-colors">FAQ</a>
@@ -88,25 +90,27 @@ export default function LandingPage() {
               {isDark ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
             </button>
 
-            {isAuthenticated ? (
-              <button 
-                onClick={() => navigate('/dashboard')}
-                className="px-4 py-2 rounded-lg text-sm bg-violet-600 hover:bg-violet-700 text-white font-medium shadow-lg shadow-violet-500/25 transition-all"
-              >
-                Go to Workspace
-              </button>
-            ) : (
-              <>
-                <Link to="/login" className="px-4 py-2 text-sm font-medium hover:text-violet-400 transition-colors">
-                  Sign In
-                </Link>
-                <Link 
-                  to="/login?register=true"
-                  className="px-4 py-2 rounded-lg text-sm bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-700 hover:to-cyan-600 text-white font-semibold shadow-lg shadow-violet-500/20 transition-all"
+            {!loading && (
+              isAuthenticated ? (
+                <button 
+                  onClick={() => navigate('/dashboard')}
+                  className="px-4 py-2 rounded-lg text-sm bg-violet-600 hover:bg-violet-700 text-white font-medium shadow-lg shadow-violet-500/25 transition-all"
                 >
-                  Get Started Free
-                </Link>
-              </>
+                  Go to Workspace
+                </button>
+              ) : (
+                <>
+                  <Link to="/login" className="px-4 py-2 text-sm font-medium hover:text-violet-400 transition-colors">
+                    Sign In
+                  </Link>
+                  <Link 
+                    to="/login?register=true"
+                    className="px-4 py-2 rounded-lg text-sm bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-700 hover:to-cyan-600 text-white font-semibold shadow-lg shadow-violet-500/20 transition-all"
+                  >
+                    Get Started Free
+                  </Link>
+                </>
+              )
             )}
           </div>
         </div>
