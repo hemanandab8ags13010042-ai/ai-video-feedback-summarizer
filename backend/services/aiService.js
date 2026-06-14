@@ -157,6 +157,11 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       return result.response.text();
     } catch (err) {
       console.error('Gemini chatbot error:', err);
+      const isQuotaError = err.message && (err.message.includes('429') || err.message.includes('quota') || err.message.includes('limit') || err.message.includes('Requests'));
+      if (isQuotaError) {
+        const mockReply = generateMockChatResponse(userMessage);
+        return `⚠️ **Gemini Quota Exceeded (Free Tier Rate Limit):**\n\n${mockReply}\n\n*(Note: Displaying simulated response because the Gemini API key has exceeded its rate limit. Please try again later.)*`;
+      }
       return `⚠️ **Gemini API Error:** ${err.message || 'Unknown error occurred.'}\n\nPlease check your \`GEMINI_API_KEY\` configuration. Ensure you copied it correctly from Google AI Studio.`;
     }
   }
@@ -290,6 +295,20 @@ function generateMockAnalysis(text, mimeType, teamMembers) {
     vfx_tasks: vfxTasks,
     checklist
   };
+}
+
+function generateMockChatResponse(message) {
+  const msg = message.toLowerCase();
+  if (msg.includes('task') || msg.includes('todo') || msg.includes('kanban')) {
+    return "Sure! Based on the current project feedback, we have pending tasks for **Editing** (trimming scenes, applying color grades) and **VFX** (wire compositing, keying). You can check their status in the Kanban Board.";
+  }
+  if (msg.includes('status') || msg.includes('progress') || msg.includes('pipeline')) {
+    return "The current project pipeline is active. Most tasks are in the **New** or **In Progress** column. Clients can submit additional revisions via the feedback panel.";
+  }
+  if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) {
+    return "Hello! I am your DigiQuest Studio assistant. How can I help you coordinate your video revisions today?";
+  }
+  return "I've received your message. I am here to help you coordinate tasks, track revisions, and review client comments. Let me know what you need!";
 }
 
 function parseAIJson(text) {
