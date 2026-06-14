@@ -56,7 +56,7 @@ async function addComment(req, res) {
         try {
           const { GoogleGenerativeAI } = require('@google/generative-ai');
           const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-          const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
           
           const response = await model.generateContent([
             {
@@ -285,7 +285,7 @@ Return only raw JSON. Do not include markdown code fence formatting.
       try {
         const { GoogleGenerativeAI } = require('@google/generative-ai');
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
         const response = await model.generateContent(`${systemPrompt}\n\nFeedback Comments:\n${commentsSummaryStr}`);
         const resText = response.response.text();
         

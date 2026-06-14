@@ -85,7 +85,7 @@ ${teamListStr || 'None (make generic suggestions)'}
   // 1. Gemini Implementation
   if (geminiClient) {
     try {
-      const modelName = 'gemini-1.5-flash';
+      const modelName = 'gemini-2.5-flash';
       const model = geminiClient.getGenerativeModel({ model: modelName });
       
       const contents = [];
@@ -141,7 +141,7 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
 
   if (geminiClient) {
     try {
-      const model = geminiClient.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
       // Filter history to ensure it starts with a 'user' message as required by the Gemini API
       const firstUserIndex = chatHistory.findIndex(msg => msg.role === 'user');
       const validHistory = firstUserIndex !== -1 ? chatHistory.slice(firstUserIndex) : [];
