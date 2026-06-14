@@ -220,15 +220,24 @@ async function handleChatbot(req, res) {
   }
 
   try {
-    let projectContext = '';
+    let projectContext = `User: ${req.user?.name || 'User'} (Role: ${req.user?.role || 'Guest'}).\n`;
     if (project_id) {
       const projects = await db.query('SELECT * FROM projects WHERE id = ?', [project_id]);
       if (projects.length > 0) {
         const p = projects[0];
         const tasks = await db.query('SELECT title, status, category FROM tasks WHERE project_id = ?', [project_id]);
         const tasksStr = tasks.map(t => `- [${t.status}] ${t.title} (${t.category})`).join('\n');
-        projectContext = `Project: ${p.name}, Status: ${p.status}, Type: ${p.video_type}, Deadline: ${p.deadline}. \nTasks:\n${tasksStr}`;
+        projectContext += `Active Page Context: Viewing Project: ${p.name}, Status: ${p.status}, Type: ${p.video_type}, Deadline: ${p.deadline}. \nTasks:\n${tasksStr}`;
       }
+    } else {
+      // General workspace context
+      const projects = await db.query('SELECT id, name, status, priority, client_name FROM projects');
+      const projectsStr = projects.map(p => `- Project ID ${p.id}: "${p.name}" (Client: ${p.client_name}, Status: ${p.status}, Priority: ${p.priority})`).join('\n');
+      
+      const tasksCount = await db.query('SELECT COUNT(*) as count FROM tasks');
+      const activeTasksCount = await db.query("SELECT COUNT(*) as count FROM tasks WHERE status != 'completed'");
+      
+      projectContext += `Workspace Overview Context:\n- Total Projects: ${projects.length}\n- Total Tasks: ${tasksCount[0].count}\n- Active Tasks: ${activeTasksCount[0].count}\n\nList of Projects in Workspace:\n${projectsStr}`;
     }
 
     const reply = await aiService.chatbotChat(chatHistory || [], message, projectContext);
