@@ -12,10 +12,12 @@ if (geminiKey) {
   const { GoogleGenerativeAI } = require('@google/generative-ai');
   geminiClient = new GoogleGenerativeAI(geminiKey);
   console.log('✅ Gemini API client initialized.');
-} else if (openaiKey) {
+}
+if (openaiKey) {
   openaiClient = new OpenAI({ apiKey: openaiKey });
   console.log('✅ OpenAI API client initialized.');
-} else {
+}
+if (!geminiKey && !openaiKey) {
   console.log('ℹ️ No AI API keys found. Using Mock AI processing.');
 }
 
@@ -103,7 +105,7 @@ ${teamListStr || 'None (make generic suggestions)'}
       const resText = response.response.text();
       return parseAIJson(resText);
     } catch (err) {
-      console.error('Gemini Analysis error, falling back to mock:', err);
+      console.error('Gemini Analysis error, trying fallback to OpenAI if configured:', err);
     }
   }
 
@@ -139,6 +141,7 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
   Project Context: ${projectContext}
   Reply concisely in markdown.`;
 
+  // 1. Gemini Chatbot Implementation
   if (geminiClient) {
     try {
       const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
@@ -156,16 +159,19 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       const result = await chat.sendMessage(userMessage);
       return result.response.text();
     } catch (err) {
-      console.error('Gemini chatbot error:', err);
-      const isQuotaError = err.message && (err.message.includes('429') || err.message.includes('quota') || err.message.includes('limit') || err.message.includes('Requests'));
-      if (isQuotaError) {
-        const mockReply = generateMockChatResponse(userMessage);
-        return `⚠️ **Gemini Quota Exceeded (Free Tier Rate Limit):**\n\n${mockReply}\n\n*(Note: Displaying simulated response because the Gemini API key has exceeded its rate limit. Please try again later.)*`;
+      console.error('Gemini chatbot error, checking fallback to OpenAI:', err);
+      // If OpenAI is not configured, show mock response or default API error
+      if (!openaiClient) {
+        const isQuotaError = err.message && (err.message.includes('429') || err.message.includes('quota') || err.message.includes('limit') || err.message.includes('Requests'));
+        if (isQuotaError) {
+          return generateMockChatResponse(userMessage);
+        }
+        return `⚠️ **Gemini API Error:** ${err.message || 'Unknown error occurred.'}\n\nPlease check your \`GEMINI_API_KEY\` configuration.`;
       }
-      return `⚠️ **Gemini API Error:** ${err.message || 'Unknown error occurred.'}\n\nPlease check your \`GEMINI_API_KEY\` configuration. Ensure you copied it correctly from Google AI Studio.`;
     }
   }
 
+  // 2. OpenAI Chatbot Implementation
   if (openaiClient) {
     try {
       const messages = [
@@ -180,10 +186,13 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       return result.choices[0].message.content;
     } catch (err) {
       console.error('OpenAI chatbot error:', err);
+      if (geminiClient) {
+        return `⚠️ **AI Service Failure:** Both Gemini and OpenAI APIs failed to respond. Please check your credentials and quota limits.`;
+      }
     }
   }
 
-  return `🤖 [Mock AI] I've received your message: "${userMessage}". Here is a helpful response! To get actual AI replies, please configure GEMINI_API_KEY in your .env file.`;
+  return `🤖 [Mock AI] I've received your message: "${userMessage}". Here is a helpful response! To get actual AI replies, please configure GEMINI_API_KEY or OPENAI_API_KEY in your .env file.`;
 }
 
 /**
