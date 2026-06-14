@@ -160,14 +160,6 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       return result.response.text();
     } catch (err) {
       console.error('Gemini chatbot error, checking fallback to OpenAI:', err);
-      // If OpenAI is not configured, show mock response or default API error
-      if (!openaiClient) {
-        const isQuotaError = err.message && (err.message.includes('429') || err.message.includes('quota') || err.message.includes('limit') || err.message.includes('Requests'));
-        if (isQuotaError) {
-          return generateMockChatResponse(userMessage);
-        }
-        return `⚠️ **Gemini API Error:** ${err.message || 'Unknown error occurred.'}\n\nPlease check your \`GEMINI_API_KEY\` configuration.`;
-      }
     }
   }
 
@@ -185,13 +177,12 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       });
       return result.choices[0].message.content;
     } catch (err) {
-      console.error('OpenAI chatbot error:', err);
-      const openAiError = err.message || err.toString();
-      return `⚠️ **AI Service Failure:** Both Gemini and OpenAI APIs failed to respond.\n\n* **Gemini**: Rate limit or quota limit exceeded.\n* **OpenAI**: ${openAiError}\n\n*(Please check your billing details and key status.)*`;
+      console.error('OpenAI chatbot error, falling back to mock:', err);
     }
   }
 
-  return `🤖 [Mock AI] I've received your message: "${userMessage}". Here is a helpful response! To get actual AI replies, please configure GEMINI_API_KEY or OPENAI_API_KEY in your .env file.`;
+  // 3. Fallback Mock Implementation
+  return generateMockChatResponse(userMessage);
 }
 
 /**
