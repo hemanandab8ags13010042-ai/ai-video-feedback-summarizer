@@ -153,6 +153,7 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
       return result.response.text();
     } catch (err) {
       console.error('Gemini chatbot error:', err);
+      return `⚠️ **Gemini API Error:** ${err.message || 'Unknown error occurred.'}\n\nPlease check your \`GEMINI_API_KEY\` configuration. Ensure you copied it correctly from Google AI Studio.`;
     }
   }
 
