@@ -151,7 +151,7 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
           role: msg.role === 'assistant' ? 'model' : 'user',
           parts: [{ text: msg.content }]
         })),
-        systemInstruction: systemPrompt
+        systemInstruction: { parts: [{ text: systemPrompt }] }
       });
       const result = await chat.sendMessage(userMessage);
       return result.response.text();
