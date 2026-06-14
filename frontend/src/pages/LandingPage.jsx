@@ -69,7 +69,11 @@ export default function LandingPage() {
 
           <div className="hidden md:flex items-center gap-8 text-sm font-medium">
             <a href="#features" className="hover:text-violet-400 transition-colors">Features</a>
-            <a href="#preview" className="hover:text-violet-400 transition-colors">Workspace</a>
+            {isAuthenticated ? (
+              <Link to="/dashboard" className="hover:text-violet-400 transition-colors">Workspace</Link>
+            ) : (
+              <Link to="/login" className="hover:text-violet-400 transition-colors">Sign In</Link>
+            )}
             <a href="#pricing" className="hover:text-violet-400 transition-colors">Pricing</a>
             <a href="#faq" className="hover:text-violet-400 transition-colors">FAQ</a>
           </div>
