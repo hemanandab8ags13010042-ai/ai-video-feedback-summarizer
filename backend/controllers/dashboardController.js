@@ -183,7 +183,7 @@ async function getDashboardData(req, res) {
         });
       }
 
-      // Calculate project health score based on actual status, deadlines, and active tasks
+      // Calculate project health score based on actual status, deadlines, active tasks, and client sentiments
       let projectScore = 100; // Perfect health base
       
       if (proj.status !== 'completed') {
@@ -207,6 +207,15 @@ async function getDashboardData(req, res) {
         
         // Bind boundary limits to [10, 100]
         projectScore = Math.max(10, Math.min(100, projectScore));
+
+        // 3. Incorporate Client Sentiment Score (50% weight)
+        let sentimentScore = 100;
+        if (allTexts.length > 0) {
+          sentimentScore = (positiveCount * 100 + neutralCount * 50 + negativeCount * 0) / allTexts.length;
+        }
+
+        // Combined score: 50% task/deadline health + 50% client sentiment
+        projectScore = Math.round(projectScore * 0.5 + sentimentScore * 0.5);
       }
       
       let status = 'Healthy';
