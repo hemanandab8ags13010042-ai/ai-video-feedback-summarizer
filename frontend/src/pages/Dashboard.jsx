@@ -357,7 +357,7 @@ export default function Dashboard() {
               <div className="flex flex-col items-center justify-center py-4 relative">
                 {/* SVG Radial Gauge / Speedometer */}
                 <div className="relative w-36 h-36 flex items-center justify-center">
-                  <svg className="w-full h-full" viewBox="0 0 100 100">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                     {/* Background track circle */}
                     <circle
                       cx="50"
@@ -366,9 +366,6 @@ export default function Dashboard() {
                       fill="transparent"
                       stroke={isDark ? '#1E293B' : '#E2E8F0'}
                       strokeWidth="10"
-                      strokeDasharray="188.4 251.2"
-                      strokeDashoffset="-94.2"
-                      strokeLinecap="round"
                     />
                     {/* Colored gauge value */}
                     <circle
@@ -382,8 +379,8 @@ export default function Dashboard() {
                         '#EF4444'
                       }
                       strokeWidth="10"
-                      strokeDasharray={`${188.4 * (projectHealth.overallScore / 100)} 251.2`}
-                      strokeDashoffset="-94.2"
+                      strokeDasharray={`${251.2 * (projectHealth.overallScore / 100)} 251.2`}
+                      strokeDashoffset="0"
                       strokeLinecap="round"
                       className="transition-all duration-1000 ease-out"
                     />
