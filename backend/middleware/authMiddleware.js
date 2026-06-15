@@ -8,8 +8,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkeyforfeedbacksummar
  */
 async function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
-  // Expecting: "Bearer <token>"
-  const token = authHeader && authHeader.split(' ')[1];
+  // Expecting: "Bearer <token>" or fallback to query parameter for browser downloads (e.g. CSV reports)
+  let token = authHeader && authHeader.split(' ')[1];
+
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required. Please authenticate.' });
