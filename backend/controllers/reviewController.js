@@ -49,31 +49,10 @@ async function addComment(req, res) {
     // 4. Handle Voice Recording Upload & Speech-to-Text Transcription
     if (file) {
       const audioUrl = await uploadFile(file);
-      let transcript = 'Audio feedback uploaded.';
-
-      // Attempt transcription via Gemini if API key is loaded
-      if (process.env.GEMINI_API_KEY) {
-        try {
-          const { GoogleGenerativeAI } = require('@google/generative-ai');
-          const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-          const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-          
-          const response = await model.generateContent([
-            {
-              inlineData: {
-                data: file.buffer.toString('base64'),
-                mimeType: file.mimetype
-              }
-            },
-            { text: "Transcribe the audio message. Return only the transcript text." }
-          ]);
-          transcript = response.response.text().trim();
-        } catch (e) {
-          console.error('Audio transcription error:', e.message);
-          transcript = `[Mock Transcription] User requested changes: "${comment}"`;
-        }
-      } else {
-        transcript = `[Mock Speech-To-Text] Transcription details: "${comment}"`;
+      let transcript = await aiService.transcribeAudio(file.buffer, file.mimetype, file.originalname);
+      
+      if (!transcript) {
+        transcript = `[Mock Speech-To-Text] Client requests changes: "${comment || 'Adjust volume levels, trim intro timeline, and paint out wire reflection.'}"`;
       }
 
       await db.query(
@@ -278,26 +257,7 @@ You must return a valid JSON object matching the schema:
 Return only raw JSON. Do not include markdown code fence formatting.
 `;
 
-    let aiOutput = null;
-
-    // Call Gemini API if key is loaded
-    if (process.env.GEMINI_API_KEY) {
-      try {
-        const { GoogleGenerativeAI } = require('@google/generative-ai');
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-        const response = await model.generateContent(`${systemPrompt}\n\nFeedback Comments:\n${commentsSummaryStr}`);
-        const resText = response.response.text();
-        
-        let cleaned = resText.trim();
-        if (cleaned.startsWith('```')) {
-          cleaned = cleaned.replace(/^```json\s*/i, '').replace(/```$/, '');
-        }
-        aiOutput = JSON.parse(cleaned);
-      } catch (err) {
-        console.error('Gemini video analysis failed, falling back to mock:', err);
-      }
-    }
+    let aiOutput = await aiService.analyzeVideoCommentsAI(version.video_title, commentsSummaryStr);
 
     // Fallback Mock compile if API key is absent or failed
     if (!aiOutput) {

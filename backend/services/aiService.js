@@ -379,7 +379,156 @@ function parseAIJson(text) {
   }
 }
 
+/**
+ * Transcribe an audio buffer using Groq, OpenAI, or Gemini in order
+ */
+async function transcribeAudio(fileBuffer, mimeType, originalName) {
+  // 1. Try Groq (Whisper large v3)
+  if (groqClient) {
+    try {
+      const { toFile } = require('groq-sdk');
+      const fileObject = await toFile(fileBuffer, originalName || 'audio.wav');
+      const transcription = await groqClient.audio.transcriptions.create({
+        file: fileObject,
+        model: 'whisper-large-v3',
+      });
+      if (transcription && transcription.text) {
+        console.log('✅ Transcription successful via Groq:', transcription.text);
+        return transcription.text.trim();
+      }
+    } catch (err) {
+      console.error('Groq transcription error, trying fallback:', err.message);
+    }
+  }
+
+  // 2. Try OpenAI (Whisper 1)
+  if (openaiClient) {
+    try {
+      const fileObject = await OpenAI.toFile(fileBuffer, originalName || 'audio.wav');
+      const transcription = await openaiClient.audio.transcriptions.create({
+        file: fileObject,
+        model: 'whisper-1',
+      });
+      if (transcription && transcription.text) {
+        console.log('✅ Transcription successful via OpenAI:', transcription.text);
+        return transcription.text.trim();
+      }
+    } catch (err) {
+      console.error('OpenAI transcription error, trying fallback:', err.message);
+    }
+  }
+
+  // 3. Try Gemini
+  if (geminiClient) {
+    try {
+      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const response = await model.generateContent([
+        {
+          inlineData: {
+            data: fileBuffer.toString('base64'),
+            mimeType: mimeType
+          }
+        },
+        { text: "Transcribe the audio message. Return only the transcript text." }
+      ]);
+      const resText = response.response.text();
+      if (resText) {
+        console.log('✅ Transcription successful via Gemini:', resText);
+        return resText.trim();
+      }
+    } catch (err) {
+      console.error('Gemini transcription error:', err.message);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Analyze video comments using Gemini, OpenAI, or Groq
+ */
+async function analyzeVideoCommentsAI(videoTitle, commentsSummaryStr) {
+  const systemPrompt = `
+You are an expert AI Video Editor and VFX director.
+Analyze the following timestamped client feedback comments for the video "${videoTitle}" and compile a structured summary and task lists.
+
+You must return a valid JSON object matching the schema:
+{
+  "summary": "Short paragraph summarizing the feedback theme...",
+  "action_items": ["Action 1", "Action 2"],
+  "editing_tasks": [
+    { "title": "Trim intro timeline", "description": "At 00:15: Cut out scene transition.", "priority": "high", "hours": 2 }
+  ],
+  "vfx_tasks": [
+    { "title": "Paint out wire reflection", "description": "At 01:20: Remove marker.", "priority": "medium", "hours": 4 }
+  ],
+  "audio_tasks": [
+    { "title": "Equalize dialog volume", "description": "At 02:40: Boost levels.", "priority": "low", "hours": 1.5 }
+  ],
+  "subtitle_tasks": [
+    { "title": "Fix typographic error", "description": "At 03:00: Correct spelling of name.", "priority": "medium", "hours": 0.5 }
+  ],
+  "priority_breakdown": { "high": 3, "medium": 5, "low": 2 },
+  "estimated_hours": 8.0,
+  "suggestions": ["Ensure warps match scene shadows", "Recalibrate volume levels"]
+}
+
+Return only raw JSON. Do not include markdown code fence formatting.
+`;
+
+  // 1. Try Gemini
+  if (geminiClient) {
+    try {
+      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const response = await model.generateContent(`${systemPrompt}\n\nFeedback Comments:\n${commentsSummaryStr}`);
+      const resText = response.response.text();
+      return parseAIJson(resText);
+    } catch (err) {
+      console.error('Gemini video analysis failed, trying fallback:', err.message);
+    }
+  }
+
+  // 2. Try OpenAI
+  if (openaiClient) {
+    try {
+      const response = await openaiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Feedback Comments:\n${commentsSummaryStr}` }
+        ],
+        response_format: { type: 'json_object' }
+      });
+      return JSON.parse(response.choices[0].message.content);
+    } catch (err) {
+      console.error('OpenAI video analysis failed, trying fallback:', err.message);
+    }
+  }
+
+  // 3. Try Groq
+  if (groqClient) {
+    try {
+      const response = await groqClient.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Feedback Comments:\n${commentsSummaryStr}` }
+        ],
+        response_format: { type: 'json_object' }
+      });
+      return JSON.parse(response.choices[0].message.content);
+    } catch (err) {
+      console.error('Groq video analysis failed:', err.message);
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   analyzeFeedback,
-  chatbotChat
+  chatbotChat,
+  transcribeAudio,
+  analyzeVideoCommentsAI
 };
+

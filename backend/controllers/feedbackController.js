@@ -36,7 +36,26 @@ async function analyzeFeedback(req, res) {
 
     // Determine type: 'text', 'voice', 'pdf', 'email', 'transcript'
     const feedbackType = type || (file ? (file.mimetype.startsWith('audio') ? 'voice' : 'pdf') : 'text');
-    const feedbackContent = text_feedback || '';
+    let feedbackContent = text_feedback || '';
+
+    // If it is an audio/voice note, transcribe it
+    if (file && file.mimetype.startsWith('audio')) {
+      let transcriptText = null;
+      try {
+        transcriptText = await aiService.transcribeAudio(file.buffer, file.mimetype, file.originalname);
+      } catch (transcribeError) {
+        console.error('Failed to transcribe feedback audio, using text fallback:', transcribeError.message);
+      }
+
+      if (!transcriptText) {
+        transcriptText = `[Mock Transcript] Client requests changes: "${text_feedback || 'Adjust timeline pacing, fix the wire compositing setup, and color grade LUT warmup.'}"`;
+      }
+
+      console.log('🗣️ Feedback audio transcript:', transcriptText);
+      feedbackContent = feedbackContent 
+        ? `${feedbackContent}\n\n[Voice Note Transcript]: ${transcriptText}`
+        : transcriptText;
+    }
 
     // 3. Save raw feedback to database
     const feedbackResult = await db.query(

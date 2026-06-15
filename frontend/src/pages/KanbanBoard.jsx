@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
-import { taskService, authService, projectService } from '../services/api';
+import { taskService, authService, projectService, BASE_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import io from 'socket.io-client';
 import { 
   Plus, Calendar, User, Clock, Check, X, ClipboardList,
   AlertCircle, MessageSquare, ChevronDown, RefreshCw
@@ -29,6 +30,27 @@ export default function KanbanBoard() {
   const [taskHours, setTaskHours] = useState('');
   const [auditComment, setAuditComment] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
+
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    // Initialize socket connection to backend
+    const socket = io(BASE_URL);
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('🔌 Connected to real-time Kanban sync');
+    });
+
+    socket.on('task-moved-update', (data) => {
+      console.log('🔄 Task status sync event:', data);
+      fetchKanbanData(); // Refresh UI dynamically
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   const columns = [
     { id: 'new', title: 'New', color: 'bg-slate-500/10 text-slate-400 border-slate-500/25' },
@@ -95,6 +117,9 @@ export default function KanbanBoard() {
         status: columnId,
         comment: `Task moved to "${columnId.toUpperCase()}" via Kanban Drag-and-Drop.`
       });
+      if (socketRef.current) {
+        socketRef.current.emit('task-moved', { taskId, status: columnId });
+      }
       await fetchKanbanData(); // Refresh to fetch history & verify DB consistency
     } catch (err) {
       console.error('Failed to update task column status:', err);
@@ -138,6 +163,9 @@ export default function KanbanBoard() {
         comment: auditComment || 'Task details modified.'
       });
 
+      if (socketRef.current) {
+        socketRef.current.emit('task-moved', { taskId: activeTask.id, status: taskStatus });
+      }
       setIsModalOpen(false);
       await fetchKanbanData();
     } catch (err) {

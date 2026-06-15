@@ -9,6 +9,30 @@ const db = require('./config/db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const http = require('http');
+const socketIo = require('socket.io');
+
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  }
+});
+
+// Setup Socket.io events
+io.on('connection', (socket) => {
+  console.log(`🔌 Socket client connected: ${socket.id}`);
+
+  // Sync Kanban movement actions
+  socket.on('task-moved', (data) => {
+    socket.broadcast.emit('task-moved-update', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`🔌 Socket client disconnected: ${socket.id}`);
+  });
+});
 
 // Middleware
 app.use(cors({
@@ -59,7 +83,7 @@ app.get('/health', (req, res) => {
 async function startServer() {
   try {
     await db.initDB();
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
       console.log(`🚀 AI Video Feedback Summarizer Backend running on port ${PORT}`);
     });
   } catch (err) {

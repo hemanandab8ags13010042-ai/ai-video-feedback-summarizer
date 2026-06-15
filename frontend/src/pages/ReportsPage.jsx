@@ -59,6 +59,17 @@ export default function ReportsPage() {
     }
   };
 
+  const handleDownloadPDF = async () => {
+    try {
+      const downloadUrl = await reportService.downloadPDF(reportType);
+      // Native window dispatch to trigger download attachment stream
+      window.open(downloadUrl, '_blank');
+      setTimeout(fetchReportsHistory, 1000); // refresh history logs
+    } catch (err) {
+      console.error('Failed to dispatch PDF download:', err);
+    }
+  };
+
   // Render header values based on report types
   const getHeaders = () => {
     if (!reportData || reportData.length === 0) return [];
@@ -146,6 +157,14 @@ export default function ReportsPage() {
                     >
                       <FileSpreadsheet className="w-4 h-4" />
                       Export CSV Sheet
+                    </button>
+                    <button
+                      onClick={handleDownloadPDF}
+                      disabled={loading}
+                      className="w-full py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-lg shadow-cyan-500/15"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export Branded PDF
                     </button>
                   </div>
                 </div>

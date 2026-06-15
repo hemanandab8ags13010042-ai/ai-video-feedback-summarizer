@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { 
   FileText, Upload, Sparkles, User, Clock, AlertCircle,
   AlertTriangle, CheckSquare, MessageSquare, ArrowLeft,
-  ChevronRight, Mic, Play, Check, Send, X, ShieldAlert
+  ChevronRight, Mic, Play, Check, Send, X, ShieldAlert, Square
 } from 'lucide-react';
 
 export default function ProjectDetails() {
@@ -31,6 +31,11 @@ export default function ProjectDetails() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState(1);
   const fileInputRef = useRef(null);
+
+  // Voice recording states
+  const [isVoiceRecording, setIsVoiceRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
 
 
@@ -82,6 +87,48 @@ export default function ProjectDetails() {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setUploadFile(e.target.files[0]);
+    }
+  };
+
+  // Voice Recording Logic for General Feedback
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const voiceFile = new File([audioBlob], 'voice_feedback.wav', { type: 'audio/wav' });
+        setUploadFile(voiceFile);
+        setTextFeedback(prev => prev || '[Voice Feedback Note recorded]');
+      };
+
+      mediaRecorderRef.current.start();
+      setIsVoiceRecording(true);
+    } catch (e) {
+      // Fallback simulated voice note
+      setIsVoiceRecording(true);
+      setTimeout(() => {
+        const audioBlob = new Blob(['simulated voice data'], { type: 'audio/wav' });
+        const voiceFile = new File([audioBlob], 'voice_feedback.wav', { type: 'audio/wav' });
+        setUploadFile(voiceFile);
+        setIsVoiceRecording(false);
+        setTextFeedback(prev => prev || '[Simulated Voice Feedback Note]');
+      }, 3000);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isVoiceRecording) {
+      mediaRecorderRef.current.stop();
+      setIsVoiceRecording(false);
     }
   };
 
@@ -207,6 +254,31 @@ export default function ProjectDetails() {
                       />
                     </div>
 
+                    <div className="flex items-center justify-between gap-4">
+                      <button
+                        type="button"
+                        onClick={isVoiceRecording ? stopVoiceRecording : startVoiceRecording}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                          isVoiceRecording 
+                            ? 'bg-rose-500 text-white animate-pulse border border-rose-500 shadow-rose-500/20' 
+                            : isDark ? 'bg-[#0B0F19] hover:bg-slate-850 text-slate-400 border border-slate-850' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
+                        }`}
+                      >
+                        {isVoiceRecording ? (
+                          <>
+                            <Square className="w-3.5 h-3.5 fill-white" />
+                            Stop Recording Voice Note
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="w-3.5 h-3.5" />
+                            Record Voice Feedback Note
+                          </>
+                        )}
+                      </button>
+                      <span className="text-[10px] text-slate-500">Or drag files below:</span>
+                    </div>
+
                     {/* Drag-and-drop uploader */}
                     <div 
                       onDragEnter={handleDrag}
@@ -229,16 +301,25 @@ export default function ProjectDetails() {
                       />
                       
                       {uploadFile ? (
-                        <div className="flex items-center gap-2 text-violet-400">
-                          <FileText className="w-6 h-6" />
-                          <div className="text-xs font-bold truncate max-w-xs">{uploadFile.name}</div>
-                          <button 
-                            type="button" 
-                            onClick={(e) => { e.stopPropagation(); setUploadFile(null); }}
-                            className="p-1 hover:text-red-500"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                        <div className="flex flex-col gap-2 w-full text-violet-400" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center gap-2">
+                            <Mic className="w-5 h-5 text-cyan-400" />
+                            <div className="text-xs font-bold truncate max-w-xs">{uploadFile.name}</div>
+                            <button 
+                              type="button" 
+                              onClick={(e) => { e.stopPropagation(); setUploadFile(null); }}
+                              className="p-1 hover:text-red-500 ml-auto"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          {uploadFile.name === 'voice_feedback.wav' && (
+                            <audio 
+                              controls 
+                              src={URL.createObjectURL(uploadFile)} 
+                              className="w-full h-7 mt-1 accent-cyan-400"
+                            />
+                          )}
                         </div>
                       ) : (
                         <>

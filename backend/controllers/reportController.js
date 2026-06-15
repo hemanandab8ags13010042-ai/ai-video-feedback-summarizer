@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const PDFDocument = require('pdfkit');
 
 /**
  * Generate and download reports
@@ -87,6 +88,178 @@ async function generateReport(req, res) {
     );
 
     // --- 3. Format output payload ---
+    if (outputFormat === 'pdf') {
+      if (reportData.length === 0) {
+        return res.status(404).send('No data available for this report.');
+      }
+
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      
+      // Set response headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}.pdf"`);
+      
+      // Stream PDF directly to response
+      doc.pipe(res);
+
+      // --- Header Design ---
+      // Branded logo background accent
+      doc.rect(0, 0, 612, 100).fill('#161D30');
+      doc.fillColor('#FFFFFF')
+         .font('Helvetica-Bold')
+         .fontSize(20)
+         .text('DIGIQUEST STUDIO', 50, 30);
+      doc.fontSize(10)
+         .font('Helvetica')
+         .text('Enterprise Video Feedback & Pipeline Analytics', 50, 55);
+
+      // Report metadata in header right
+      doc.fillColor('#A78BFA')
+         .fontSize(10)
+         .text(`REPORT: ${type.toUpperCase().replace('_', ' ')}`, 380, 30, { align: 'right', width: 165 })
+         .fillColor('#94A3B8')
+         .text(`Generated: ${new Date().toLocaleDateString()}`, 380, 45, { align: 'right', width: 165 })
+         .text(`By: ${req.user.name}`, 380, 60, { align: 'right', width: 165 });
+
+      // Move cursor below header
+      doc.y = 130;
+      doc.fillColor('#1E293B');
+
+      // --- Body ---
+      doc.fontSize(14)
+         .font('Helvetica-Bold')
+         .fillColor('#7C3AED')
+         .text(`${type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')} Overview`, 50, doc.y);
+      
+      doc.moveDown(1);
+
+      // Define table headers and keys based on report type
+      let headers = [];
+      let keys = [];
+      let colWidths = [];
+
+      if (type === 'productivity') {
+        headers = ['Staff Name', 'Role', 'Completed Tasks', 'Total Hours', 'Avg Hours/Task'];
+        keys = ['staff_name', 'staff_role', 'completed_tasks', 'total_hours_spent', 'avg_hours_per_task'];
+        colWidths = [120, 100, 100, 80, 95];
+      } else if (type === 'revision_history') {
+        headers = ['Project Name', 'Type', 'Feedback', 'Priority', 'Effort'];
+        keys = ['project_name', 'feedback_type', 'feedback_text', 'priority_detected', 'effort_estimate'];
+        colWidths = [110, 80, 185, 65, 55];
+      } else if (type === 'team_performance') {
+        headers = ['Staff Name', 'Role', 'Completed', 'Active', 'Total', 'Hours Scheduled'];
+        keys = ['staff_name', 'staff_role', 'tasks_completed', 'tasks_active', 'total_tasks', 'total_hours_scheduled'];
+        colWidths = [120, 95, 70, 55, 50, 105];
+      } else if (type === 'project_completion') {
+        headers = ['Project Name', 'Client', 'Status', 'Deadline', 'Tasks Completed'];
+        keys = ['project_name', 'client_name', 'project_status', 'deadline', 'completed_tasks'];
+        colWidths = [120, 110, 95, 95, 75];
+      }
+
+      // Draw table header row
+      const startY = doc.y;
+      doc.font('Helvetica-Bold')
+         .fontSize(9)
+         .fillColor('#475569');
+
+      let currentX = 50;
+      headers.forEach((header, index) => {
+        doc.text(header, currentX, startY, { width: colWidths[index], truncate: true });
+        currentX += colWidths[index];
+      });
+
+      // Draw horizontal line under headers
+      doc.moveTo(50, startY + 15)
+         .lineTo(545, startY + 15)
+         .strokeColor('#CBD5E1')
+         .lineWidth(1)
+         .stroke();
+
+      doc.y = startY + 25;
+      
+      // Draw table rows
+      doc.font('Helvetica')
+         .fontSize(8.5)
+         .fillColor('#334155');
+
+      reportData.forEach((row, rowIndex) => {
+        // Page break safety check
+        if (doc.y > 750) {
+          doc.addPage();
+          // Redraw headers on new page
+          const newPageY = 50;
+          doc.font('Helvetica-Bold')
+             .fontSize(9)
+             .fillColor('#475569');
+
+          let tempX = 50;
+          headers.forEach((header, index) => {
+            doc.text(header, tempX, newPageY, { width: colWidths[index], truncate: true });
+            tempX += colWidths[index];
+          });
+
+          doc.moveTo(50, newPageY + 15)
+             .lineTo(545, newPageY + 15)
+             .strokeColor('#CBD5E1')
+             .stroke();
+
+          doc.y = newPageY + 25;
+          doc.font('Helvetica')
+             .fontSize(8.5)
+             .fillColor('#334155');
+        }
+
+        const rowY = doc.y;
+        let rowX = 50;
+
+        keys.forEach((key, colIndex) => {
+          let val = row[key];
+
+          // Special formatting for columns
+          if (key === 'completed_tasks' && type === 'project_completion') {
+            val = `${row['completed_tasks'] || 0} / ${row['total_tasks'] || 0}`;
+          } else if (key === 'deadline' && val) {
+            val = new Date(val).toLocaleDateString();
+          } else if (key === 'avg_hours_per_task' || key === 'effort_estimate' || key === 'total_hours_spent' || key === 'total_hours_scheduled') {
+            val = val !== null && val !== undefined ? parseFloat(val).toFixed(1) + ' hrs' : '0.0 hrs';
+          } else if (val === null || val === undefined) {
+            val = 'N/A';
+          } else {
+            val = String(val);
+          }
+
+          doc.text(val, rowX, rowY, { width: colWidths[colIndex], height: 35, ellipsis: true });
+          rowX += colWidths[colIndex];
+        });
+
+        // Alternate row background coloring (subtle stripe)
+        if (rowIndex % 2 === 1) {
+          doc.save()
+             .rect(50, rowY - 4, 495, 20)
+             .fillColor('#F8FAFC')
+             .fillOpacity(0.4)
+             .restore();
+        }
+
+        doc.y = rowY + 20;
+      });
+
+      // Footer signature
+      doc.y = Math.max(doc.y + 30, 750);
+      doc.moveTo(50, doc.y - 10)
+         .lineTo(545, doc.y - 10)
+         .strokeColor('#E2E8F0')
+         .stroke();
+         
+      doc.fontSize(8)
+         .fillColor('#94A3B8')
+         .text('DigiQuest Studio Workflow Analytics — Generated securely under user session.', 50, doc.y, { align: 'center', width: 495 });
+
+      // Close and finish PDF document
+      doc.end();
+      return;
+    }
+
     if (outputFormat === 'csv') {
       if (reportData.length === 0) {
         return res.status(404).send('No data available for this report.');

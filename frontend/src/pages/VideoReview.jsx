@@ -113,6 +113,54 @@ export default function VideoReview() {
     }
   }, [loading, isDrawingMode]);
 
+  // Reactive video annotation rendering
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // If the user is currently actively drawing or drawing mode is on,
+    // clear the canvas for a clean drawing slate and do not draw active comments annotations.
+    if (isDrawingMode || drawHistory.length > 0) {
+      if (drawHistory.length === 0) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      } else {
+        redrawCanvasHistory();
+      }
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Find all comments close to this time (e.g. within 2 seconds)
+    comments.forEach(comment => {
+      if (!comment.draw_data || comment.draw_data.length === 0) return;
+      
+      const timeDiff = currentTime - comment.timestamp_seconds;
+      if (timeDiff >= 0 && timeDiff <= 2.0) {
+        comment.draw_data.forEach(item => {
+          ctx.strokeStyle = item.color || '#EF4444';
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          
+          if (item.type === 'free') {
+            ctx.beginPath();
+            ctx.moveTo(item.x1, item.y1);
+            ctx.lineTo(item.x2, item.y2);
+            ctx.stroke();
+          } else if (item.type === 'circle') {
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, item.radius, 0, 2 * Math.PI);
+            ctx.stroke();
+          } else if (item.type === 'arrow') {
+            drawArrow(ctx, item.x1, item.y1, item.x2, item.y2);
+          }
+        });
+      }
+    });
+  }, [currentTime, comments, isDrawingMode, drawHistory]);
+
+
   // --- HTML5 Video Controls ---
   const handlePlayPause = () => {
     if (videoRef.current.paused) {
@@ -891,10 +939,22 @@ export default function VideoReview() {
                           <div className="mt-2.5 p-2 rounded bg-slate-500/5 flex flex-col gap-1 text-[10px]">
                             <audio 
                               controls 
+                              onClick={(e) => e.stopPropagation()}
                               src={c.voice_audio_url.startsWith('http') ? c.voice_audio_url : `${BASE_URL}${c.voice_audio_url}`} 
-                              className="w-full h-5 accent-cyan-400"
+                              className="w-full h-6 accent-cyan-400 rounded"
                             />
-                            <span className="text-[9px] text-slate-500 italic">"Transcript: {c.voice_transcript}"</span>
+                            <span 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                videoRef.current.currentTime = c.timestamp_seconds;
+                                setCurrentTime(c.timestamp_seconds);
+                              }}
+                              className="text-[9.5px] text-violet-400 hover:text-cyan-400 transition-colors font-medium mt-1 cursor-pointer flex items-center gap-1 select-none"
+                              title="Click transcript to seek video"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                              Transcript: "{c.voice_transcript}"
+                            </span>
                           </div>
                         )}
                       </div>

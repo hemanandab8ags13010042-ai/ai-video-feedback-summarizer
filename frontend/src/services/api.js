@@ -139,6 +139,11 @@ export const reportService = {
     const token = localStorage.getItem('token');
     return `${API_URL}/reports?type=${type}&format=csv&token=${token}`;
   },
+  downloadPDF: async (type) => {
+    // Return window URL for downloading PDF
+    const token = localStorage.getItem('token');
+    return `${API_URL}/reports?type=${type}&format=pdf&token=${token}`;
+  },
   getHistory: async () => {
     const res = await api.get('/reports/history');
     return res.data;
