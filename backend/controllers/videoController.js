@@ -1,6 +1,8 @@
 const db = require('../config/db');
 const { uploadFile } = require('../config/cloudinary');
 const notificationService = require('../services/notificationService');
+const path = require('path');
+const aiService = require('../services/aiService');
 
 /**
  * Admin uploads a new video (with initial version e.g. V1)
@@ -278,9 +280,192 @@ async function getVersionDetails(req, res) {
   }
 }
 
+/**
+ * Export version timeline comments as Premiere CSV or DaVinci EDL markers
+ * GET /api/videos/version/:version_id/export-markers
+ */
+async function exportVersionMarkers(req, res) {
+  const versionId = req.params.version_id;
+  const format = req.query.format || 'csv';
+
+  try {
+    const comments = await db.query(
+      `SELECT c.*, u.name as commenter_name 
+       FROM feedback_comments c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE c.version_id = ?
+       ORDER BY c.timestamp_seconds ASC`,
+      [versionId]
+    );
+
+    const markerExporter = require('../services/markerExporter');
+    let fileContent = '';
+
+    if (format === 'edl') {
+      fileContent = markerExporter.exportToResolveEDL(comments);
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename=markers-version-${versionId}.edl`);
+    } else {
+      fileContent = markerExporter.exportToPremiereCSV(comments);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename=markers-version-${versionId}.csv`);
+    }
+
+    res.send(fileContent);
+  } catch (err) {
+    console.error('Export Version Markers Error:', err.message);
+    res.status(500).json({ error: 'Failed to export timeline markers.' });
+  }
+}
+
+function formatTimecode(secondsDecimal, isVtt = false) {
+  const totalMs = Math.round(secondsDecimal * 1000);
+  const hrs = Math.floor(totalMs / 3600000);
+  const mins = Math.floor((totalMs % 3600000) / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
+
+  const pad = (num, size) => num.toString().padStart(size, '0');
+  const separator = isVtt ? '.' : ',';
+
+  return `${pad(hrs, 2)}:${pad(mins, 2)}:${pad(secs, 2)}${separator}${pad(ms, 3)}`;
+}
+
+function convertSubtitlesToSRT(subtitles) {
+  return subtitles.map((sub, index) => {
+    return `${index + 1}\n${formatTimecode(sub.start_time, false)} --> ${formatTimecode(sub.end_time, false)}\n${sub.text}\n`;
+  }).join('\n');
+}
+
+function convertSubtitlesToVTT(subtitles) {
+  const body = subtitles.map((sub, index) => {
+    return `${index + 1}\n${formatTimecode(sub.start_time, true)} --> ${formatTimecode(sub.end_time, true)}\n${sub.text}\n`;
+  }).join('\n');
+  return `WEBVTT\n\n${body}`;
+}
+
+async function generateSubtitles(req, res) {
+  const versionId = req.params.version_id;
+
+  try {
+    // 1. Get video version
+    const versions = await db.query('SELECT * FROM video_versions WHERE id = ?', [versionId]);
+    if (versions.length === 0) {
+      return res.status(404).json({ error: 'Video version not found.' });
+    }
+    const version = versions[0];
+
+    // 2. Resolve local file path
+    let localPath = null;
+    if (version.file_url) {
+      const uploadsIndex = version.file_url.indexOf('/uploads/');
+      if (uploadsIndex !== -1) {
+        const relativePath = version.file_url.substring(uploadsIndex);
+        localPath = path.join(__dirname, '..', relativePath);
+      } else if (version.file_url.startsWith('uploads/')) {
+        localPath = path.join(__dirname, '..', version.file_url);
+      } else {
+        const filename = path.basename(version.file_url);
+        localPath = path.join(__dirname, '..', 'uploads', filename);
+      }
+    }
+
+    // 3. Generate subtitles using AI
+    const subtitles = await aiService.generateSubtitlesAI(localPath);
+
+    // 4. Save to db (clear old ones first)
+    await db.query('DELETE FROM video_subtitles WHERE version_id = ?', [versionId]);
+    for (const sub of subtitles) {
+      await db.query(
+        'INSERT INTO video_subtitles (version_id, start_time, end_time, text) VALUES (?, ?, ?, ?)',
+        [versionId, sub.start_time, sub.end_time, sub.text]
+      );
+    }
+
+    // 5. Query back all inserted subtitles
+    const savedSubtitles = await db.query(
+      'SELECT * FROM video_subtitles WHERE version_id = ? ORDER BY start_time ASC',
+      [versionId]
+    );
+
+    res.status(201).json(savedSubtitles);
+  } catch (err) {
+    console.error('Generate Subtitles Error:', err);
+    res.status(500).json({ error: 'Failed to generate subtitles.' });
+  }
+}
+
+async function getSubtitles(req, res) {
+  const versionId = req.params.version_id;
+
+  try {
+    const subtitles = await db.query(
+      'SELECT * FROM video_subtitles WHERE version_id = ? ORDER BY start_time ASC',
+      [versionId]
+    );
+    res.json(subtitles);
+  } catch (err) {
+    console.error('Get Subtitles Error:', err.message);
+    res.status(500).json({ error: 'Failed to retrieve subtitles.' });
+  }
+}
+
+async function updateSubtitle(req, res) {
+  const { version_id, subtitle_id } = req.params;
+  const { text } = req.body;
+
+  if (text === undefined) {
+    return res.status(400).json({ error: 'Subtitle text is required.' });
+  }
+
+  try {
+    await db.query(
+      'UPDATE video_subtitles SET text = ? WHERE id = ? AND version_id = ?',
+      [text, subtitle_id, version_id]
+    );
+    res.json({ message: 'Subtitle updated successfully.' });
+  } catch (err) {
+    console.error('Update Subtitle Error:', err.message);
+    res.status(500).json({ error: 'Failed to update subtitle.' });
+  }
+}
+
+async function exportSubtitles(req, res) {
+  const versionId = req.params.version_id;
+  const format = req.query.format || 'srt';
+
+  try {
+    const subtitles = await db.query(
+      'SELECT * FROM video_subtitles WHERE version_id = ? ORDER BY start_time ASC',
+      [versionId]
+    );
+
+    let fileContent = '';
+    if (format === 'vtt') {
+      fileContent = convertSubtitlesToVTT(subtitles);
+      res.setHeader('Content-Type', 'text/vtt');
+      res.setHeader('Content-Disposition', `attachment; filename=subtitles-version-${versionId}.vtt`);
+    } else {
+      fileContent = convertSubtitlesToSRT(subtitles);
+      res.setHeader('Content-Type', 'text/srt');
+      res.setHeader('Content-Disposition', `attachment; filename=subtitles-version-${versionId}.srt`);
+    }
+
+    res.send(fileContent);
+  } catch (err) {
+    console.error('Export Subtitles Error:', err.message);
+    res.status(500).json({ error: 'Failed to export subtitles.' });
+  }
+}
+
 module.exports = {
   uploadVideo,
   uploadNewVersion,
   getVideosByProject,
-  getVersionDetails
+  getVersionDetails,
+  exportVersionMarkers,
+  generateSubtitles,
+  getSubtitles,
+  updateSubtitle,
+  exportSubtitles
 };

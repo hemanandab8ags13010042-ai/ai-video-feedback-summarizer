@@ -4,10 +4,12 @@ import Sidebar from '../components/Sidebar';
 import { videoService, reviewService, feedbackService, BASE_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import io from 'socket.io-client';
 import { 
   Play, Pause, Volume2, Maximize, Clock, User, Check, Sparkles,
   ArrowLeft, Send, Trash2, Edit3, MessageSquare, Mic, Disc, Square,
-  CheckCircle, AlertCircle, RefreshCw, ChevronDown, Award, HelpCircle
+  CheckCircle, AlertCircle, RefreshCw, ChevronDown, Award, HelpCircle,
+  Download, FileText, Edit2
 } from 'lucide-react';
 
 export default function VideoReview() {
@@ -33,6 +35,23 @@ export default function VideoReview() {
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
+
+  // Comparison player states
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareVersionId, setCompareVersionId] = useState('');
+  const [compareVersion, setCompareVersion] = useState(null);
+  const compareVideoRef = useRef(null);
+
+  // Player sizing and custom fits
+  const playerContainerRef = useRef(null);
+  const [fitMode, setFitMode] = useState('contain'); // 'contain' | 'cover' | 'fill'
+  const [videoAspectRatio, setVideoAspectRatio] = useState('16/9');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resizeKey, setResizeKey] = useState(0);
+
+  // Real-time whiteboard collaborators & socket connection
+  const [collaborators, setCollaborators] = useState({});
+  const socketRef = useRef(null);
 
   // Canvas drawing states
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -64,6 +83,13 @@ export default function VideoReview() {
   // Right sidebar tab
   const [activeTab, setActiveTab] = useState('comments'); // 'comments', 'ai', 'chat'
 
+  // Subtitles & Caption States
+  const [subtitles, setSubtitles] = useState([]);
+  const [isGeneratingSubtitles, setIsGeneratingSubtitles] = useState(false);
+  const [activeSubtitle, setActiveSubtitle] = useState(null);
+  const [editingSubtitleId, setEditingSubtitleId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+
   // Chatbot states
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState([
@@ -71,6 +97,125 @@ export default function VideoReview() {
   ]);
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
+
+  const handleCompareVersionChange = async (e) => {
+    const val = e.target.value;
+    setCompareVersionId(val);
+    if (!val) {
+      setCompareVersion(null);
+      return;
+    }
+    try {
+      const data = await videoService.getVersionDetails(val);
+      setCompareVersion(data.version);
+    } catch (err) {
+      console.error('Failed to load comparison version details:', err);
+    }
+  };
+
+  // Synced playback state locks (play, pause, speed)
+  useEffect(() => {
+    if (isComparing && compareVideoRef.current && videoRef.current) {
+      // Sync speed
+      compareVideoRef.current.playbackRate = videoRef.current.playbackRate;
+      
+      // Sync play/pause state
+      if (isPlaying) {
+        compareVideoRef.current.play().catch(() => {});
+      } else {
+        compareVideoRef.current.pause();
+      }
+
+      // Sync seek time once on comparison start or comparison cut change
+      compareVideoRef.current.currentTime = videoRef.current.currentTime;
+    }
+  }, [isPlaying, isComparing, playbackSpeed, compareVersionId]);
+
+  // Real-time whiteboard WebSockets room setup and drawing syncer
+  useEffect(() => {
+    const socket = io(BASE_URL);
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('🔌 Connected to real-time whiteboard collaboration');
+      if (versionId && user) {
+        socket.emit('join-review-session', { versionId, userName: user.name });
+      }
+    });
+
+    socket.on('cursor-move-update', (data) => {
+      const { socketId, x, y, userName, color, leave } = data;
+      if (leave) {
+        setCollaborators(prev => {
+          const next = { ...prev };
+          delete next[socketId];
+          return next;
+        });
+      } else {
+        setCollaborators(prev => ({
+          ...prev,
+          [socketId]: { x, y, userName, color, lastUpdated: Date.now() }
+        }));
+      }
+    });
+
+    socket.on('draw-stroke-update', (data) => {
+      const { stroke } = data;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      
+      ctx.strokeStyle = stroke.color || '#EF4444';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      if (stroke.type === 'free') {
+        ctx.beginPath();
+        ctx.moveTo(stroke.x1 * w, stroke.y1 * h);
+        ctx.lineTo(stroke.x2 * w, stroke.y2 * h);
+        ctx.stroke();
+      } else if (stroke.type === 'circle') {
+        ctx.beginPath();
+        ctx.arc(stroke.x * w, stroke.y * h, stroke.radius * w, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (stroke.type === 'arrow') {
+        drawArrow(ctx, stroke.x1 * w, stroke.y1 * h, stroke.x2 * w, stroke.y2 * h);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [versionId, user]);
+
+  // Whiteboard inactive cursors cleanup timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setCollaborators(prev => {
+        const cleaned = {};
+        Object.keys(prev).forEach(key => {
+          if (now - prev[key].lastUpdated < 3000) {
+            cleaned[key] = prev[key];
+          }
+        });
+        return cleaned;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchSubtitles = async () => {
+    try {
+      const data = await videoService.getSubtitles(versionId);
+      setSubtitles(data);
+    } catch (err) {
+      console.error('Failed to load subtitles:', err);
+    }
+  };
 
   const fetchVersionReviewData = async () => {
     try {
@@ -80,6 +225,7 @@ export default function VideoReview() {
       setAiSummary(data.aiSummary);
       setApprovals(data.approvals);
       setSiblingVersions(data.siblingVersions);
+      await fetchSubtitles();
     } catch (err) {
       console.error('Failed to load version details:', err);
     }
@@ -94,6 +240,16 @@ export default function VideoReview() {
     init();
   }, [versionId]);
 
+  // Update active subtitle segment based on currentTime
+  useEffect(() => {
+    if (subtitles && subtitles.length > 0) {
+      const active = subtitles.find(s => currentTime >= s.start_time && currentTime <= s.end_time);
+      setActiveSubtitle(active || null);
+    } else {
+      setActiveSubtitle(null);
+    }
+  }, [currentTime, subtitles]);
+
   // Restore player progress
   useEffect(() => {
     if (videoRef.current) {
@@ -106,12 +262,48 @@ export default function VideoReview() {
 
   // Canvas context scaling setup
   useEffect(() => {
-    if (canvasRef.current) {
-      const canvas = canvasRef.current;
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
+    const handleResize = () => {
+      if (canvasRef.current) {
+        const canvas = canvasRef.current;
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+      }
+      setIsFullscreen(!!document.fullscreenElement);
+      setResizeKey(prev => prev + 1);
+    };
+    handleResize();
+    // Schedule a small delay to make sure layout has settled
+    const timer = setTimeout(handleResize, 100);
+    
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('fullscreenchange', handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', handleResize);
+    };
+  }, [loading, isDrawingMode, videoAspectRatio, fitMode, isComparing, compareVersion, compareVersionId]);
+
+  const getCoord = (val, scale) => {
+    if (val === undefined || val === null) return 0;
+    return Math.abs(val) <= 1 ? val * scale : val;
+  };
+
+  const getCombinedAspectRatio = () => {
+    if (isComparing && compareVersion) {
+      if (!videoAspectRatio) return '32/9';
+      const parts = videoAspectRatio.split('/');
+      if (parts.length === 2) {
+        const w = parseFloat(parts[0]);
+        const h = parseFloat(parts[1]);
+        if (!isNaN(w) && !isNaN(h) && h !== 0) {
+          return `${w * 2}/${h}`;
+        }
+      }
+      return '32/9';
     }
-  }, [loading, isDrawingMode]);
+    return videoAspectRatio || '16/9';
+  };
 
   // Reactive video annotation rendering
   useEffect(() => {
@@ -138,27 +330,37 @@ export default function VideoReview() {
       
       const timeDiff = currentTime - comment.timestamp_seconds;
       if (timeDiff >= 0 && timeDiff <= 2.0) {
+        const w = canvas.width;
+        const h = canvas.height;
         comment.draw_data.forEach(item => {
           ctx.strokeStyle = item.color || '#EF4444';
           ctx.lineWidth = 3;
           ctx.lineCap = 'round';
           
+          const x1 = getCoord(item.x1, w);
+          const y1 = getCoord(item.y1, h);
+          const x2 = getCoord(item.x2, w);
+          const y2 = getCoord(item.y2, h);
+          const x = getCoord(item.x, w);
+          const y = getCoord(item.y, h);
+          const radius = getCoord(item.radius, w);
+
           if (item.type === 'free') {
             ctx.beginPath();
-            ctx.moveTo(item.x1, item.y1);
-            ctx.lineTo(item.x2, item.y2);
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
             ctx.stroke();
           } else if (item.type === 'circle') {
             ctx.beginPath();
-            ctx.arc(item.x, item.y, item.radius, 0, 2 * Math.PI);
+            ctx.arc(x, y, radius, 0, 2 * Math.PI);
             ctx.stroke();
           } else if (item.type === 'arrow') {
-            drawArrow(ctx, item.x1, item.y1, item.x2, item.y2);
+            drawArrow(ctx, x1, y1, x2, y2);
           }
         });
       }
     });
-  }, [currentTime, comments, isDrawingMode, drawHistory]);
+  }, [currentTime, comments, isDrawingMode, drawHistory, resizeKey]);
 
 
   // --- HTML5 Video Controls ---
@@ -168,9 +370,15 @@ export default function VideoReview() {
       setIsPlaying(true);
       setIsDrawingMode(false); // clear drawing mode when playing
       clearCanvas();
+      if (isComparing && compareVideoRef.current) {
+        compareVideoRef.current.play().catch(() => {});
+      }
     } else {
       videoRef.current.pause();
       setIsPlaying(false);
+      if (isComparing && compareVideoRef.current) {
+        compareVideoRef.current.pause();
+      }
     }
   };
 
@@ -178,6 +386,15 @@ export default function VideoReview() {
     if (videoRef.current) {
       const curr = videoRef.current.currentTime;
       setCurrentTime(curr);
+      
+      // Sync comparison player if drift is larger than 0.35 seconds
+      if (isComparing && compareVideoRef.current) {
+        const diff = Math.abs(curr - compareVideoRef.current.currentTime);
+        if (diff > 0.35) {
+          compareVideoRef.current.currentTime = curr;
+        }
+      }
+      
       // Auto save progress every 5 seconds
       localStorage.setItem(`video_progress_${versionId}`, curr.toString());
     }
@@ -186,6 +403,11 @@ export default function VideoReview() {
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
+      const width = videoRef.current.videoWidth;
+      const height = videoRef.current.videoHeight;
+      if (width && height) {
+        setVideoAspectRatio(`${width}/${height}`);
+      }
     }
   };
 
@@ -193,12 +415,18 @@ export default function VideoReview() {
     const time = parseFloat(e.target.value);
     videoRef.current.currentTime = time;
     setCurrentTime(time);
+    if (isComparing && compareVideoRef.current) {
+      compareVideoRef.current.currentTime = time;
+    }
     clearCanvas();
   };
 
   const handleSpeedChange = (speed) => {
     videoRef.current.playbackRate = speed;
     setPlaybackSpeed(speed);
+    if (isComparing && compareVideoRef.current) {
+      compareVideoRef.current.playbackRate = speed;
+    }
   };
 
   const handleVolumeChange = (e) => {
@@ -208,8 +436,14 @@ export default function VideoReview() {
   };
 
   const handleFullscreen = () => {
-    if (videoRef.current.requestFullscreen) {
-      videoRef.current.requestFullscreen();
+    if (playerContainerRef.current) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        playerContainerRef.current.requestFullscreen().catch(err => {
+          console.error("Failed to enter fullscreen mode:", err);
+        });
+      }
     }
   };
 
@@ -253,14 +487,23 @@ export default function VideoReview() {
       ctx.lineTo(pos.x, pos.y);
       ctx.stroke();
 
-      setDrawHistory(prev => [...prev, {
+      const stroke = {
         type: 'free',
         color: drawingColor,
-        x1: startX.current,
-        y1: startY.current,
-        x2: pos.x,
-        y2: pos.y
-      }]);
+        x1: startX.current / canvas.width,
+        y1: startY.current / canvas.height,
+        x2: pos.x / canvas.width,
+        y2: pos.y / canvas.height
+      };
+
+      if (socketRef.current) {
+        socketRef.current.emit('draw-stroke', {
+          versionId,
+          stroke
+        });
+      }
+
+      setDrawHistory(prev => [...prev, stroke]);
 
       startX.current = pos.x;
       startY.current = pos.y;
@@ -284,29 +527,69 @@ export default function VideoReview() {
   const stopDrawing = (e) => {
     if (!isDrawing.current || !isDrawingMode) return;
     isDrawing.current = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const pos = getCanvasMousePos(e);
 
     if (drawingTool === 'circle') {
       const radius = Math.sqrt(Math.pow(pos.x - startX.current, 2) + Math.pow(pos.y - startY.current, 2));
-      setDrawHistory(prev => [...prev, {
+      const stroke = {
         type: 'circle',
         color: drawingColor,
-        x: startX.current,
-        y: startY.current,
-        radius
-      }]);
+        x: startX.current / canvas.width,
+        y: startY.current / canvas.height,
+        radius: radius / canvas.width
+      };
+      if (socketRef.current) {
+        socketRef.current.emit('draw-stroke', {
+          versionId,
+          stroke
+        });
+      }
+      setDrawHistory(prev => [...prev, stroke]);
     } 
     
     else if (drawingTool === 'arrow') {
-      setDrawHistory(prev => [...prev, {
+      const stroke = {
         type: 'arrow',
         color: drawingColor,
-        x1: startX.current,
-        y1: startY.current,
-        x2: pos.x,
-        y2: pos.y
-      }]);
+        x1: startX.current / canvas.width,
+        y1: startY.current / canvas.height,
+        x2: pos.x / canvas.width,
+        y2: pos.y / canvas.height
+      };
+      if (socketRef.current) {
+        socketRef.current.emit('draw-stroke', {
+          versionId,
+          stroke
+        });
+      }
+      setDrawHistory(prev => [...prev, stroke]);
     }
+  };
+
+  const handlePlayerMouseMove = (e) => {
+    if (!socketRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+
+    socketRef.current.emit('cursor-move', {
+      versionId,
+      x,
+      y,
+      userName: user?.name || 'Anonymous',
+      color: drawingColor || '#EF4444'
+    });
+  };
+
+  const handlePlayerMouseLeave = () => {
+    if (!socketRef.current) return;
+    socketRef.current.emit('cursor-move', {
+      versionId,
+      leave: true
+    });
   };
 
   const drawArrow = (ctx, fromX, fromY, toX, toY) => {
@@ -335,25 +618,37 @@ export default function VideoReview() {
 
   const redrawCanvasHistory = () => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const w = canvas.width;
+    const h = canvas.height;
     
     drawHistory.forEach(item => {
       ctx.strokeStyle = item.color;
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       
+      const x1 = getCoord(item.x1, w);
+      const y1 = getCoord(item.y1, h);
+      const x2 = getCoord(item.x2, w);
+      const y2 = getCoord(item.y2, h);
+      const x = getCoord(item.x, w);
+      const y = getCoord(item.y, h);
+      const radius = getCoord(item.radius, w);
+      
       if (item.type === 'free') {
         ctx.beginPath();
-        ctx.moveTo(item.x1, item.y1);
-        ctx.lineTo(item.x2, item.y2);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
         ctx.stroke();
       } else if (item.type === 'circle') {
         ctx.beginPath();
-        ctx.arc(item.x, item.y, item.radius, 0, 2 * Math.PI);
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
         ctx.stroke();
       } else if (item.type === 'arrow') {
-        drawArrow(ctx, item.x1, item.y1, item.x2, item.y2);
+        drawArrow(ctx, x1, y1, x2, y2);
       }
     });
   };
@@ -367,22 +662,33 @@ export default function VideoReview() {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    const w = canvas.width;
+    const h = canvas.height;
+
     comment.draw_data.forEach(item => {
       ctx.strokeStyle = item.color;
       ctx.lineWidth = 3;
       ctx.lineCap = 'round';
       
+      const x1 = getCoord(item.x1, w);
+      const y1 = getCoord(item.y1, h);
+      const x2 = getCoord(item.x2, w);
+      const y2 = getCoord(item.y2, h);
+      const x = getCoord(item.x, w);
+      const y = getCoord(item.y, h);
+      const radius = getCoord(item.radius, w);
+
       if (item.type === 'free') {
         ctx.beginPath();
-        ctx.moveTo(item.x1, item.y1);
-        ctx.lineTo(item.x2, item.y2);
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
         ctx.stroke();
       } else if (item.type === 'circle') {
         ctx.beginPath();
-        ctx.arc(item.x, item.y, item.radius, 0, 2 * Math.PI);
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
         ctx.stroke();
       } else if (item.type === 'arrow') {
-        drawArrow(ctx, item.x1, item.y1, item.x2, item.y2);
+        drawArrow(ctx, x1, y1, x2, y2);
       }
     });
   };
@@ -611,32 +917,113 @@ export default function VideoReview() {
           <div className="flex-1 flex flex-col p-4 sm:p-8 space-y-6 overflow-y-visible lg:overflow-y-auto">
             
             {/* Custom Video Player workspace */}
-            <div className={`rounded-xl border overflow-hidden relative group/player flex flex-col ${
-              isDark ? 'bg-black border-slate-850' : 'bg-slate-900 border-slate-200 shadow-lg'
-            }`}>
+            <div 
+              ref={playerContainerRef}
+              className={`relative group/player flex flex-col w-full h-full ${
+                isFullscreen ? 'rounded-none border-0' : 'rounded-xl border'
+              } ${
+                isDark ? 'bg-black border-slate-850' : 'bg-slate-900 border-slate-200 shadow-lg'
+              }`}
+            >
               
               {/* Media viewport container */}
-              <div className="relative aspect-video w-full overflow-hidden flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  src={version?.file_url.startsWith('http') ? version.file_url : `${BASE_URL}${version.file_url}`}
-                  onTimeUpdate={handleTimeUpdate}
-                  onLoadedMetadata={handleLoadedMetadata}
-                  onClick={handlePlayPause}
-                  className="w-full h-full object-contain cursor-pointer"
-                />
+              <div 
+                className={`relative w-full overflow-hidden flex items-center justify-center bg-black ${
+                  isFullscreen ? 'flex-1 h-0' : ''
+                }`}
+                style={{ 
+                  aspectRatio: isFullscreen ? 'auto' : getCombinedAspectRatio(),
+                  maxHeight: isFullscreen ? 'none' : '65vh'
+                }}
+              >
+                <div className={`w-full h-full grid ${isComparing && compareVersion ? 'grid-cols-2 gap-1 bg-slate-950' : 'grid-cols-1'}`}>
+                  
+                  {/* Left Player (Current Cut) */}
+                  <div 
+                    className="relative w-full h-full flex items-center justify-center"
+                    onMouseMove={handlePlayerMouseMove}
+                    onMouseLeave={handlePlayerMouseLeave}
+                  >
+                    <video
+                      ref={videoRef}
+                      src={version?.file_url.startsWith('http') ? version.file_url : `${BASE_URL}${version.file_url}`}
+                      onTimeUpdate={handleTimeUpdate}
+                      onLoadedMetadata={handleLoadedMetadata}
+                      onClick={handlePlayPause}
+                      className={`w-full h-full cursor-pointer ${
+                        fitMode === 'cover' ? 'object-cover' : fitMode === 'fill' ? 'object-fill' : 'object-contain'
+                      }`}
+                    />
 
-                {/* Drawing HTML5 Canvas overlay */}
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  className={`absolute inset-0 w-full h-full ${
-                    isDrawingMode ? 'cursor-crosshair pointer-events-auto' : 'pointer-events-none'
-                  }`}
-                />
+                    {/* Drawing HTML5 Canvas overlay */}
+                    <canvas
+                      ref={canvasRef}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      className={`absolute inset-0 w-full h-full ${
+                        isDrawingMode ? 'cursor-crosshair pointer-events-auto' : 'pointer-events-none'
+                      }`}
+                    />
+
+                    {/* Floating Collaborators Overlay */}
+                    {Object.entries(collaborators).map(([socketId, collaborator]) => {
+                      if (collaborator.leave) return null;
+                      return (
+                        <div
+                          key={socketId}
+                          className="absolute pointer-events-none z-50 transition-all duration-75 ease-out"
+                          style={{
+                            left: `${collaborator.x * 100}%`,
+                            top: `${collaborator.y * 100}%`,
+                            transform: 'translate(-4px, -4px)'
+                          }}
+                        >
+                          <svg
+                            className="w-5 h-5 drop-shadow-md"
+                            viewBox="0 0 24 24"
+                            fill={collaborator.color || '#EF4444'}
+                            stroke="white"
+                            strokeWidth="1.5"
+                          >
+                            <path d="M4.5 3V17L9 12.5L14.5 18L17 15.5L11.5 10L16.5 9.5L4.5 3Z" />
+                          </svg>
+                          <span 
+                            className="absolute left-4 top-4 px-1.5 py-0.5 rounded text-[9px] font-bold text-white shadow backdrop-blur-sm whitespace-nowrap"
+                            style={{ backgroundColor: collaborator.color || '#EF4444' }}
+                          >
+                            {collaborator.userName}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {isComparing && compareVersion && (
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold bg-violet-600/90 text-white shadow backdrop-blur-sm">
+                        Current: {version?.version_number}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right Player (Compare Sibling Cut) */}
+                  {isComparing && compareVersion && (
+                    <div className="relative w-full h-full flex items-center justify-center border-l border-slate-800 bg-black">
+                      <video
+                        ref={compareVideoRef}
+                        src={compareVersion.file_url.startsWith('http') ? compareVersion.file_url : `${BASE_URL}${compareVersion.file_url}`}
+                        muted
+                        className={`w-full h-full ${
+                          fitMode === 'cover' ? 'object-cover' : fitMode === 'fill' ? 'object-fill' : 'object-contain'
+                        }`}
+                      />
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold bg-cyan-600/90 text-white shadow backdrop-blur-sm">
+                        Compare: {compareVersion.version_number}
+                      </span>
+                    </div>
+                  )}
+
+                </div>
               </div>
 
               {/* Seekbar and Timeline comment markers */}
@@ -713,6 +1100,21 @@ export default function VideoReview() {
                       />
                     </div>
 
+                    {/* Scale Aspect Toggle */}
+                    <button 
+                      onClick={() => {
+                        setFitMode(prev => prev === 'contain' ? 'cover' : prev === 'cover' ? 'fill' : 'contain');
+                      }}
+                      className={`px-2 py-0.5 rounded text-[9px] uppercase font-extrabold tracking-wider transition-all border ${
+                        isDark 
+                          ? 'border-slate-800 bg-slate-900/60 text-slate-300 hover:text-white hover:bg-slate-900' 
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-800 hover:bg-slate-100'
+                      }`}
+                      title="Toggle Video fit: Fit (Letterbox) / Fill (Crop) / Stretch"
+                    >
+                      {fitMode}
+                    </button>
+
                     <button onClick={handleFullscreen} className="p-1 hover:text-white">
                       <Maximize className="w-4.5 h-4.5" />
                     </button>
@@ -761,6 +1163,42 @@ export default function VideoReview() {
                       <option value="arrow">Arrow</option>
                     </select>
                   </div>
+                )}
+              </div>
+
+              {/* Compare version controls */}
+              <div className="flex items-center gap-2 border-l border-slate-800/20 pl-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsComparing(!isComparing);
+                    if (!isComparing && siblingVersions.length > 0 && !compareVersionId) {
+                      const firstSibling = siblingVersions.find(s => s.id.toString() !== versionId.toString());
+                      if (firstSibling) {
+                        handleCompareVersionChange({ target: { value: firstSibling.id.toString() } });
+                      }
+                    }
+                  }}
+                  className={`px-2.5 py-1.5 rounded text-xs font-bold transition-all ${
+                    isComparing ? 'bg-cyan-600 text-white' : 'bg-slate-500/10 hover:bg-slate-500/20 text-slate-400'
+                  }`}
+                >
+                  Version Compare
+                </button>
+
+                {isComparing && (
+                  <select
+                    value={compareVersionId}
+                    onChange={handleCompareVersionChange}
+                    className={`pl-2 pr-6 py-1 text-xs font-bold rounded border cursor-pointer focus:outline-none ${
+                      isDark ? 'bg-[#0B0F19] border-slate-850 text-cyan-400' : 'bg-slate-50 border-slate-200 text-cyan-600'
+                    }`}
+                  >
+                    <option value="">Select Cut...</option>
+                    {siblingVersions.map((v) => (
+                      <option key={v.id} value={v.id}>{v.version_number} cut</option>
+                    ))}
+                  </select>
                 )}
               </div>
 
@@ -881,7 +1319,7 @@ export default function VideoReview() {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-3 text-xs font-bold capitalize border-b-2 transition-colors ${
+                  className={`flex-1 py-3 text-[10px] font-bold capitalize border-b-2 transition-colors ${
                     activeTab === tab
                       ? 'border-violet-500 text-violet-400 bg-violet-500/5'
                       : isDark ? 'border-transparent text-slate-500 hover:text-slate-300' : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -898,6 +1336,37 @@ export default function VideoReview() {
               {/* Tab 1: Comments history */}
               {activeTab === 'comments' && (
                 <div className="space-y-3">
+                  {comments.length > 0 && (
+                    <div className="flex items-center justify-between border-b pb-2 mb-2 border-slate-800/10">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Timeline Revisions ({comments.length})</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={async () => {
+                            const url = await videoService.downloadMarkers(versionId, 'csv');
+                            window.open(url, '_blank');
+                          }}
+                          className={`px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
+                            isDark ? 'border-slate-800 hover:bg-slate-850 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                          }`}
+                          title="Export for Premiere Pro as CSV Markers"
+                        >
+                          Premiere CSV
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const url = await videoService.downloadMarkers(versionId, 'edl');
+                            window.open(url, '_blank');
+                          }}
+                          className={`px-2 py-1 rounded text-[9px] font-bold border transition-colors ${
+                            isDark ? 'border-slate-800 hover:bg-slate-850 text-slate-300' : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                          }`}
+                          title="Export for DaVinci Resolve as EDL Markers"
+                        >
+                          Resolve EDL
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {comments.length === 0 ? (
                     <p className="text-xs text-slate-500 py-6 text-center">No comments logged along this timeline yet.</p>
                   ) : (
@@ -1067,6 +1536,192 @@ export default function VideoReview() {
                       <Send className="w-3.5 h-3.5" />
                     </button>
                   </form>
+                </div>
+              )}
+
+              {/* Tab 4: Subtitles generator and editor */}
+              {activeTab === 'subtitles' && (
+                <div className="flex flex-col h-[450px] justify-between">
+                  {subtitles.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
+                      <div className="w-12 h-12 rounded-full bg-violet-600/10 flex items-center justify-center text-violet-400">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>No Subtitles Yet</h3>
+                        <p className="text-xs text-slate-500 max-w-[200px]">Transcribe the audio track and generate timestamped subtitles automatically using AI.</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            setIsGeneratingSubtitles(true);
+                            const data = await videoService.generateSubtitles(versionId);
+                            setSubtitles(data);
+                          } catch (err) {
+                            console.error('Failed to generate subtitles:', err);
+                          } finally {
+                            setIsGeneratingSubtitles(false);
+                          }
+                        }}
+                        disabled={isGeneratingSubtitles}
+                        className="px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:bg-violet-850 text-white font-bold text-xs rounded-lg shadow-md shadow-violet-500/10 transition-colors flex items-center gap-1.5"
+                      >
+                        {isGeneratingSubtitles ? (
+                          <>
+                            <span className="animate-spin inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full" />
+                            Transcribing Audio...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Generate AI Subtitles
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex-grow flex flex-col h-full overflow-hidden">
+                      {/* Subtitle control actions */}
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-800/10 mb-3 flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={async () => {
+                              const url = await videoService.downloadSubtitles(versionId, 'srt');
+                              window.open(url, '_blank');
+                            }}
+                            className={`px-2 py-1 text-[10px] font-bold rounded flex items-center gap-1 border transition-colors ${
+                              isDark ? 'bg-slate-850 hover:bg-slate-800 border-slate-805 text-slate-300' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <Download className="w-3 h-3" />
+                            SRT
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const url = await videoService.downloadSubtitles(versionId, 'vtt');
+                              window.open(url, '_blank');
+                            }}
+                            className={`px-2 py-1 text-[10px] font-bold rounded flex items-center gap-1 border transition-colors ${
+                              isDark ? 'bg-slate-850 hover:bg-slate-800 border-slate-805 text-slate-300' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                            }`}
+                          >
+                            <Download className="w-3 h-3" />
+                            VTT
+                          </button>
+                        </div>
+                        
+                        <button
+                          onClick={async () => {
+                            if (window.confirm("Regenerate subtitles? This will overwrite your current subtitles and custom edits.")) {
+                              try {
+                                setIsGeneratingSubtitles(true);
+                                const data = await videoService.generateSubtitles(versionId);
+                                setSubtitles(data);
+                              } catch (err) {
+                                console.error('Failed to regenerate subtitles:', err);
+                              } finally {
+                                setIsGeneratingSubtitles(false);
+                              }
+                            }
+                          }}
+                          disabled={isGeneratingSubtitles}
+                          className="text-[10px] text-violet-400 hover:text-violet-300 font-bold transition-colors flex items-center gap-1"
+                        >
+                          {isGeneratingSubtitles ? 'Transcribing...' : 'Regenerate'}
+                        </button>
+                      </div>
+
+                      {/* Subtitle segments editor list */}
+                      <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin max-h-[380px]">
+                        {subtitles.map((sub) => {
+                          const isActive = activeSubtitle && activeSubtitle.id === sub.id;
+                          const isEditing = editingSubtitleId === sub.id;
+
+                          return (
+                            <div
+                              key={sub.id}
+                              className={`p-2.5 rounded-lg border transition-all duration-150 ${
+                                isActive 
+                                  ? 'border-violet-500/50 bg-violet-600/10 shadow-sm'
+                                  : isDark ? 'border-slate-850 bg-slate-900/40 hover:bg-slate-905' : 'border-slate-200 bg-slate-50/40 hover:bg-slate-50/80'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <button
+                                  onClick={() => {
+                                    if (videoRef.current) {
+                                      videoRef.current.currentTime = sub.start_time;
+                                      setCurrentTime(sub.start_time);
+                                      if (!isPlaying) {
+                                        videoRef.current.play().catch(() => {});
+                                        setIsPlaying(true);
+                                      }
+                                    }
+                                  }}
+                                  className="text-[10px] font-mono text-violet-400 hover:underline flex items-center gap-1 font-bold"
+                                >
+                                  <Play className="w-2.5 h-2.5 fill-violet-400/20" />
+                                  {parseFloat(sub.start_time).toFixed(1)}s - {parseFloat(sub.end_time).toFixed(1)}s
+                                </button>
+                                
+                                <div className="flex items-center gap-1.5">
+                                  {!isEditing ? (
+                                    <button
+                                      onClick={() => {
+                                        setEditingSubtitleId(sub.id);
+                                        setEditingText(sub.text);
+                                      }}
+                                      className="p-1 rounded text-slate-500 hover:text-violet-400 hover:bg-violet-500/5 transition-colors"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </button>
+                                  ) : (
+                                    <>
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            await videoService.updateSubtitle(versionId, sub.id, editingText);
+                                            setSubtitles(prev => prev.map(item => item.id === sub.id ? { ...item, text: editingText } : item));
+                                            setEditingSubtitleId(null);
+                                          } catch (e) {
+                                            console.error('Failed to update subtitle text:', e);
+                                          }
+                                        }}
+                                        className="text-[10px] font-bold text-emerald-450 hover:underline"
+                                      >
+                                        Save
+                                      </button>
+                                      <button
+                                        onClick={() => setEditingSubtitleId(null)}
+                                        className="text-[10px] font-bold text-slate-500 hover:underline"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isEditing ? (
+                                <textarea
+                                  value={editingText}
+                                  onChange={(e) => setEditingText(e.target.value)}
+                                  className={`w-full p-2 text-xs rounded border focus:outline-none focus:border-violet-500 resize-none ${
+                                    isDark ? 'bg-[#0B0F19] border-slate-850 text-slate-200' : 'bg-white border-slate-250 text-slate-800'
+                                  }`}
+                                  rows={2}
+                                />
+                              ) : (
+                                <p className={`text-xs leading-normal ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+                                  {sub.text}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

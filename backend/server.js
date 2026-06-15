@@ -29,6 +29,26 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('task-moved-update', data);
   });
 
+  // Synced Collaborative Review Rooms
+  socket.on('join-review-session', (data) => {
+    const { versionId, userName } = data;
+    socket.join(`review-session-${versionId}`);
+    console.log(`👤 User "${userName}" joined review room: review-session-${versionId}`);
+  });
+
+  socket.on('cursor-move', (data) => {
+    const { versionId } = data;
+    socket.to(`review-session-${versionId}`).emit('cursor-move-update', {
+      socketId: socket.id,
+      ...data
+    });
+  });
+
+  socket.on('draw-stroke', (data) => {
+    const { versionId } = data;
+    socket.to(`review-session-${versionId}`).emit('draw-stroke-update', data);
+  });
+
   socket.on('disconnect', () => {
     console.log(`🔌 Socket client disconnected: ${socket.id}`);
   });

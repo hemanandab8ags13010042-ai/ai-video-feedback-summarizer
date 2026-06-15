@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { projectService, feedbackService, taskService, BASE_URL } from '../services/api';
+import { projectService, feedbackService, taskService, videoService, BASE_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { 
-  FileText, Upload, Sparkles, User, Clock, AlertCircle,
+  FileText, FileVideo, Upload, Sparkles, User, Clock, AlertCircle,
   AlertTriangle, CheckSquare, MessageSquare, ArrowLeft,
   ChevronRight, Mic, Play, Check, Send, X, ShieldAlert, Square
 } from 'lucide-react';
@@ -22,6 +22,7 @@ export default function ProjectDetails() {
   const [tasks, setTasks] = useState([]);
   const [aiResults, setAiResults] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Upload feedback states
@@ -48,6 +49,9 @@ export default function ProjectDetails() {
       setTasks(data.tasks);
       setAiResults(data.aiResults);
       setActivityLogs(data.activityLogs);
+      
+      const vList = await videoService.getByProject(id);
+      setVideos(vList);
     } catch (err) {
       console.error('Failed to load project details:', err);
     }
@@ -502,6 +506,60 @@ export default function ProjectDetails() {
 
             {/* Right Column: Feedback logs & Activity logs */}
             <div className="space-y-8">
+
+              {/* Video Cuts for Review */}
+              <div className={`p-6 rounded-xl border ${isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-4 border-b border-slate-800/10 pb-3">
+                  <div className="w-8 h-8 rounded-lg bg-violet-600/10 flex items-center justify-center text-violet-400">
+                    <FileVideo className="w-4.5 h-4.5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold">Video Cuts for Review</h3>
+                    <p className="text-[10px] text-slate-500">Click a version cut to view, draw annotations and submit feedback.</p>
+                  </div>
+                </div>
+
+                {videos.length === 0 ? (
+                  <p className="text-xs text-slate-500 py-6 text-center">No video cuts uploaded for review yet.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {videos.map((vid) => (
+                      <div key={vid.id} className="space-y-2">
+                        <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                          <Play className="w-3 h-3 text-violet-400 fill-violet-400/20" />
+                          {vid.title}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {vid.versions && vid.versions.map((ver) => (
+                            <button
+                              key={ver.id}
+                              onClick={() => navigate(`/review/${ver.id}`)}
+                              className={`p-2.5 rounded-lg border text-left flex flex-col justify-between transition-all group/vercard ${
+                                isDark 
+                                  ? 'bg-[#0B0F19] border-slate-850 hover:border-violet-500/50 hover:bg-[#0E1527]' 
+                                  : 'bg-slate-50 border-slate-200 hover:border-violet-500/50 hover:bg-slate-100/50'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full mb-1">
+                                <span className="font-extrabold text-xs text-violet-400 group-hover/vercard:text-violet-300">
+                                  {ver.version_number}
+                                </span>
+                                <span className={`w-2 h-2 rounded-full ${
+                                  ver.status === 'approved' ? 'bg-emerald-500' :
+                                  ver.status === 'revision_required' ? 'bg-rose-500' : 'bg-amber-500'
+                                }`} title={ver.status.replace(/_/g, ' ')} />
+                              </div>
+                              <span className="text-[9px] text-slate-500 font-semibold block">
+                                {new Date(ver.created_at).toLocaleDateString()}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               
               {/* Feedback History Logs */}
               <div className={`p-6 rounded-xl border ${isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>

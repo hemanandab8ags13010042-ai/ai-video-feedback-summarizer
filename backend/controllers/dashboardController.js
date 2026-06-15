@@ -1,5 +1,21 @@
 const db = require('../config/db');
 
+function analyzeTextSentiment(text) {
+  if (!text) return 50; // Neutral
+  const lowerText = text.toLowerCase();
+  
+  // Real emotional sentiment keywords - excluding standard editing jargon like "fix", "trim", "adjust"
+  const positiveWords = ['great', 'love', 'awesome', 'good', 'thanks', 'perfect', 'approved', 'nice', 'excellent', 'happy', 'pleased', 'superb', 'fine', 'working', 'fantastic', 'amazing', 'brilliant', 'wonderful'];
+  const negativeWords = ['bad', 'hate', 'terrible', 'broken', 'fail', 'poor', 'difficult', 'dislike', 'frustrated', 'disappointed', 'annoyed', 'angry', 'unhappy', 'useless', 'wasted', 'delay', 'late'];
+  
+  let hasPositive = positiveWords.some(w => lowerText.includes(w));
+  let hasNegative = negativeWords.some(w => lowerText.includes(w));
+  
+  if (hasNegative) return 0;   // Negative tone
+  if (hasPositive) return 100; // Positive tone
+  return 50;                  // Neutral tone
+}
+
 /**
  * Fetch stats, charts, and feed data for the dashboard
  * GET /api/dashboard
@@ -127,6 +143,93 @@ async function getDashboardData(req, res) {
       GROUP BY u.name, u.role
     `);
 
+    // --- 8. Client Sentiment & Project Health Radar ---
+    let projectsQuery = 'SELECT id, name, client_name, deadline, status FROM projects';
+    if (isClient) {
+      projectsQuery += ' WHERE client_name = ?';
+    }
+    const projects = await db.query(projectsQuery, projectParams);
+
+    const projectHealthList = [];
+    let overallScoreSum = 0;
+    
+    for (const proj of projects) {
+      const feedbacks = await db.query('SELECT content FROM feedback WHERE project_id = ?', [proj.id]);
+      const comments = await db.query(
+        `SELECT c.comment 
+         FROM feedback_comments c
+         INNER JOIN video_versions vv ON c.version_id = vv.id
+         INNER JOIN videos v ON vv.video_id = v.id
+         WHERE v.project_id = ?`,
+        [proj.id]
+      );
+      
+      const allTexts = [
+        ...feedbacks.map(f => f.content),
+        ...comments.map(c => c.comment)
+      ].filter(t => t && t.trim().length > 0);
+      
+      // Sentiment Breakdown Ratios based on client comment logs
+      let positiveCount = 0;
+      let neutralCount = 0;
+      let negativeCount = 0;
+      
+      if (allTexts.length > 0) {
+        allTexts.forEach(txt => {
+          const s = analyzeTextSentiment(txt);
+          if (s === 100) positiveCount++;
+          else if (s === 0) negativeCount++;
+          else neutralCount++;
+        });
+      }
+
+      // Calculate project health score based on actual status, deadlines, and active tasks
+      let projectScore = 100; // Perfect health base
+      
+      if (proj.status !== 'completed') {
+        // 1. Overdue penalty of 30 points if current date is past deadline
+        const today = new Date();
+        if (proj.deadline && new Date(proj.deadline) < today) {
+          projectScore -= 30;
+        }
+        
+        // 2. Unresolved task penalties
+        const activeTasks = await db.query(
+          "SELECT priority FROM tasks WHERE project_id = ? AND status != 'completed'",
+          [proj.id]
+        );
+        
+        activeTasks.forEach(task => {
+          if (task.priority === 'high') projectScore -= 8;
+          else if (task.priority === 'medium') projectScore -= 4;
+          else projectScore -= 2;
+        });
+        
+        // Bind boundary limits to [10, 100]
+        projectScore = Math.max(10, Math.min(100, projectScore));
+      }
+      
+      let status = 'Healthy';
+      if (projectScore < 35) status = 'Critical';
+      else if (projectScore < 70) status = 'At Risk';
+      
+      projectHealthList.push({
+        projectId: proj.id,
+        projectName: proj.name,
+        clientName: proj.client_name,
+        healthScore: projectScore,
+        status,
+        positiveCount,
+        neutralCount,
+        negativeCount,
+        totalFeedbackCount: allTexts.length
+      });
+      
+      overallScoreSum += projectScore;
+    }
+    
+    const overallScore = projects.length > 0 ? Math.round(overallScoreSum / projects.length) : 100;
+
     res.json({
       stats,
       charts: {
@@ -136,7 +239,12 @@ async function getDashboardData(req, res) {
       },
       activityFeed,
       notifications,
-      teamWorkload: workload
+      teamWorkload: workload,
+      projectHealth: {
+        overallScore,
+        overallStatus: overallScore >= 70 ? 'Healthy' : overallScore >= 35 ? 'At Risk' : 'Critical',
+        projects: projectHealthList
+      }
     });
 
   } catch (err) {

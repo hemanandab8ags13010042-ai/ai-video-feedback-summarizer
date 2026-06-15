@@ -296,7 +296,7 @@ Return only raw JSON. Do not include markdown code fence formatting.
     for (const t of allAITasks) {
       await db.query(
         `INSERT INTO tasks (project_id, title, description, category, priority, status, effort_hours) 
-         VALUES (?, ?, ?, ?, 'new', ?)`,
+         VALUES (?, ?, ?, ?, ?, 'new', ?)`,
         [version.project_id, t.title, t.description, t.category, t.priority || 'medium', t.hours || 0]
       );
     }

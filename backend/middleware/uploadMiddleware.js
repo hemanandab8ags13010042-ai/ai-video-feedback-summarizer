@@ -3,11 +3,11 @@ const multer = require('multer');
 // Configure memory storage
 const storage = multer.memoryStorage();
 
-// Set file upload constraints (10MB maximum file size)
+// Set file upload constraints (250MB maximum file size for videos)
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 250 * 1024 * 1024 // 250MB limit
   }
 });
 

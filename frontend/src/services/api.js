@@ -171,6 +171,26 @@ export const videoService = {
   getVersionDetails: async (versionId) => {
     const res = await api.get(`/videos/version/${versionId}`);
     return res.data;
+  },
+  downloadMarkers: async (versionId, format = 'csv') => {
+    const token = localStorage.getItem('token');
+    return `${API_URL}/videos/version/${versionId}/export-markers?format=${format}&token=${token}`;
+  },
+  generateSubtitles: async (versionId) => {
+    const res = await api.post(`/videos/version/${versionId}/subtitles`);
+    return res.data;
+  },
+  getSubtitles: async (versionId) => {
+    const res = await api.get(`/videos/version/${versionId}/subtitles`);
+    return res.data;
+  },
+  updateSubtitle: async (versionId, subtitleId, text) => {
+    const res = await api.put(`/videos/version/${versionId}/subtitles/${subtitleId}`, { text });
+    return res.data;
+  },
+  downloadSubtitles: async (versionId, format = 'srt') => {
+    const token = localStorage.getItem('token');
+    return `${API_URL}/videos/version/${versionId}/export-subtitles?format=${format}&token=${token}`;
   }
 };
 

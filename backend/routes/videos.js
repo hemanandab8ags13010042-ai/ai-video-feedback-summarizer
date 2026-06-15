@@ -14,5 +14,12 @@ router.post('/:id/versions', requireRole(['pm', 'admin']), upload.single('file')
 // General viewing routes
 router.get('/project/:project_id', videoController.getVideosByProject);
 router.get('/version/:version_id', videoController.getVersionDetails);
+router.get('/version/:version_id/export-markers', videoController.exportVersionMarkers);
+
+// Subtitles routes
+router.post('/version/:version_id/subtitles', videoController.generateSubtitles);
+router.get('/version/:version_id/subtitles', videoController.getSubtitles);
+router.put('/version/:version_id/subtitles/:subtitle_id', videoController.updateSubtitle);
+router.get('/version/:version_id/export-subtitles', videoController.exportSubtitles);
 
 module.exports = router;

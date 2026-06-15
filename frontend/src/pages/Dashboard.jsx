@@ -48,6 +48,12 @@ export default function Dashboard() {
   const [teamWorkload, setTeamWorkload] = useState([]);
   const [projects, setProjects] = useState([]);
   
+  const [projectHealth, setProjectHealth] = useState({
+    overallScore: 100,
+    overallStatus: 'Healthy',
+    projects: []
+  });
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
@@ -69,6 +75,11 @@ export default function Dashboard() {
       setActivityFeed(dashboard.activityFeed);
       setNotifications(dashboard.notifications);
       setTeamWorkload(dashboard.teamWorkload);
+      setProjectHealth(dashboard.projectHealth || {
+        overallScore: 100,
+        overallStatus: 'Healthy',
+        projects: []
+      });
 
       const projectList = await projectService.getAll();
       setProjects(projectList);
@@ -332,6 +343,152 @@ export default function Dashboard() {
               </div>
             </div>
 
+          </div>
+
+          {/* Client Sentiment & Project Health Radar Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Speedometer Radial Gauge */}
+            <div className={`p-6 rounded-xl border flex flex-col justify-between ${isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div>
+                <h3 className="text-sm font-bold mb-1">Project Health Radar</h3>
+                <p className="text-[11px] text-slate-500 mb-4">Overall workspace health calculated from client sentiments.</p>
+              </div>
+              <div className="flex flex-col items-center justify-center py-4 relative">
+                {/* SVG Radial Gauge / Speedometer */}
+                <div className="relative w-36 h-36 flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                    {/* Background track circle */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="transparent"
+                      stroke={isDark ? '#1E293B' : '#E2E8F0'}
+                      strokeWidth="10"
+                      strokeDasharray="251.2"
+                      strokeDashoffset="62.8"
+                      strokeLinecap="round"
+                    />
+                    {/* Colored gauge value */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="transparent"
+                      stroke={
+                        projectHealth.overallScore >= 70 ? '#10B981' :
+                        projectHealth.overallScore >= 35 ? '#F59E0B' :
+                        '#EF4444'
+                      }
+                      strokeWidth="10"
+                      strokeDasharray="251.2"
+                      strokeDashoffset={251.2 - (251.2 * 0.75 * (projectHealth.overallScore / 100))}
+                      strokeLinecap="round"
+                      className="transition-all duration-1000 ease-out"
+                    />
+                  </svg>
+                  
+                  {/* Gauge Text overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center mt-2">
+                    <span className="text-3xl font-black tracking-tight">{projectHealth.overallScore}%</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                      projectHealth.overallScore >= 70 ? 'text-emerald-400' :
+                      projectHealth.overallScore >= 35 ? 'text-amber-500' :
+                      'text-rose-500'
+                    }`}>
+                      {projectHealth.overallStatus}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-around border-t border-slate-800/10 pt-4 text-center">
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Healthy</span>
+                  <span className="text-sm font-extrabold text-emerald-400">
+                    {projectHealth.projects.filter(p => p.status === 'Healthy').length}
+                  </span>
+                </div>
+                <div className="border-l border-slate-800/10 h-8 font-bold"></div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">At Risk</span>
+                  <span className="text-sm font-extrabold text-amber-500">
+                    {projectHealth.projects.filter(p => p.status === 'At Risk').length}
+                  </span>
+                </div>
+                <div className="border-l border-slate-800/10 h-8 font-bold"></div>
+                <div>
+                  <span className="text-[10px] text-slate-500 block uppercase font-bold">Critical</span>
+                  <span className="text-sm font-extrabold text-rose-500">
+                    {projectHealth.projects.filter(p => p.status === 'Critical').length}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Project Sentiments Breakdown Table/List */}
+            <div className={`lg:col-span-2 p-6 rounded-xl border flex flex-col justify-between ${isDark ? 'bg-[#161D30] border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <div>
+                <h3 className="text-sm font-bold mb-1">Project Sentiment Details</h3>
+                <p className="text-[11px] text-slate-500 mb-4">Detailed sentiment ratios based on client revision feedback loops.</p>
+                
+                {projectHealth.projects.length === 0 ? (
+                  <p className="text-xs text-slate-500 py-8 text-center">No projects sentiment data analyzed.</p>
+                ) : (
+                  <div className="space-y-3.5 max-h-[260px] overflow-y-auto pr-1 scrollbar-thin">
+                    {projectHealth.projects.map((proj) => (
+                      <div key={proj.projectId} className="flex flex-col gap-1.5 p-3 rounded-lg bg-slate-500/5 border border-slate-800/5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-violet-400">{proj.projectName}</span>
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                            proj.status === 'Healthy' ? 'bg-emerald-500/10 text-emerald-400' :
+                            proj.status === 'At Risk' ? 'bg-amber-500/10 text-amber-500' :
+                            'bg-rose-500/10 text-rose-500'
+                          }`}>
+                            Score: {proj.healthScore}% ({proj.status})
+                          </span>
+                        </div>
+                        
+                        {/* Sentiment ratios bar */}
+                        <div className="flex items-center gap-2">
+                          <div className="flex-grow h-2 rounded-full overflow-hidden bg-slate-800 flex">
+                            {proj.totalFeedbackCount > 0 ? (
+                              <>
+                                <div 
+                                  className="h-full bg-emerald-500 transition-all" 
+                                  style={{ width: `${(proj.positiveCount / proj.totalFeedbackCount) * 100}%` }}
+                                  title={`Positive: ${proj.positiveCount}`}
+                                />
+                                <div 
+                                  className="h-full bg-slate-500 transition-all" 
+                                  style={{ width: `${(proj.neutralCount / proj.totalFeedbackCount) * 100}%` }}
+                                  title={`Neutral: ${proj.neutralCount}`}
+                                />
+                                <div 
+                                  className="h-full bg-rose-500 transition-all" 
+                                  style={{ width: `${(proj.negativeCount / proj.totalFeedbackCount) * 100}%` }}
+                                  title={`Negative: ${proj.negativeCount}`}
+                                />
+                              </>
+                            ) : (
+                              <div className="h-full w-full bg-emerald-500/30" title="No feedback (Assumed Healthy)" />
+                            )}
+                          </div>
+                          <span className="text-[9px] font-bold text-slate-500 whitespace-nowrap min-w-[70px] text-right">
+                            {proj.totalFeedbackCount > 0 
+                              ? `+${proj.positiveCount} | =${proj.neutralCount} | -${proj.negativeCount}`
+                              : 'No Feedback'
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
           </div>
 
           {/* Project Directory */}

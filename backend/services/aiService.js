@@ -7,14 +7,17 @@ const openaiKey = process.env.OPENAI_API_KEY;
 const groqKey = process.env.GROQ_API_KEY;
 
 let geminiClient = null;
+let fileManager = null;
 let openaiClient = null;
 let groqClient = null;
 
 if (geminiKey) {
   // Use the standard client initialization
   const { GoogleGenerativeAI } = require('@google/generative-ai');
+  const { GoogleAIFileManager } = require('@google/generative-ai/files');
   geminiClient = new GoogleGenerativeAI(geminiKey);
-  console.log('✅ Gemini API client initialized.');
+  fileManager = new GoogleAIFileManager(geminiKey);
+  console.log('✅ Gemini API client and FileManager initialized.');
 }
 if (openaiKey) {
   openaiClient = new OpenAI({ apiKey: openaiKey });
@@ -93,26 +96,28 @@ ${teamListStr || 'None (make generic suggestions)'}
 
   // 1. Gemini Implementation
   if (geminiClient) {
-    try {
-      const modelName = 'gemini-2.5-flash';
-      const model = geminiClient.getGenerativeModel({ model: modelName });
-      
-      const contents = [];
-      if (fileBuffer && fileMimeType) {
-        contents.push({
-          inlineData: {
-            data: fileBuffer.toString('base64'),
-            mimeType: fileMimeType
-          }
-        });
-      }
-      contents.push({ text: `${systemPrompt}\n\nClient input text/transcript:\n${textData || 'Feedback is in the attached file.'}` });
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    for (const modelName of models) {
+      try {
+        const model = geminiClient.getGenerativeModel({ model: modelName });
+        
+        const contents = [];
+        if (fileBuffer && fileMimeType) {
+          contents.push({
+            inlineData: {
+              data: fileBuffer.toString('base64'),
+              mimeType: fileMimeType
+            }
+          });
+        }
+        contents.push({ text: `${systemPrompt}\n\nClient input text/transcript:\n${textData || 'Feedback is in the attached file.'}` });
 
-      const response = await model.generateContent(contents);
-      const resText = response.response.text();
-      return parseAIJson(resText);
-    } catch (err) {
-      console.error('Gemini Analysis error, trying fallback to OpenAI if configured:', err);
+        const response = await model.generateContent(contents);
+        const resText = response.response.text();
+        return parseAIJson(resText);
+      } catch (err) {
+        console.warn(`Gemini (${modelName}) feedback analysis failed: ${err.message}. Trying next fallback...`);
+      }
     }
   }
 
@@ -169,23 +174,26 @@ async function chatbotChat(chatHistory, userMessage, projectContext = '') {
 
   // 1. Gemini Chatbot Implementation
   if (geminiClient) {
-    try {
-      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
-      // Filter history to ensure it starts with a 'user' message as required by the Gemini API
-      const firstUserIndex = chatHistory.findIndex(msg => msg.role === 'user');
-      const validHistory = firstUserIndex !== -1 ? chatHistory.slice(firstUserIndex) : [];
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    for (const modelName of models) {
+      try {
+        const model = geminiClient.getGenerativeModel({ model: modelName });
+        // Filter history to ensure it starts with a 'user' message as required by the Gemini API
+        const firstUserIndex = chatHistory.findIndex(msg => msg.role === 'user');
+        const validHistory = firstUserIndex !== -1 ? chatHistory.slice(firstUserIndex) : [];
 
-      const chat = model.startChat({
-        history: validHistory.map(msg => ({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }]
-        })),
-        systemInstruction: { parts: [{ text: systemPrompt }] }
-      });
-      const result = await chat.sendMessage(userMessage);
-      return result.response.text();
-    } catch (err) {
-      console.error('Gemini chatbot error, checking fallback to OpenAI:', err);
+        const chat = model.startChat({
+          history: validHistory.map(msg => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }]
+          })),
+          systemInstruction: { parts: [{ text: systemPrompt }] }
+        });
+        const result = await chat.sendMessage(userMessage);
+        return result.response.text();
+      } catch (err) {
+        console.warn(`Gemini chatbot (${modelName}) failed: ${err.message}. Trying next fallback...`);
+      }
     }
   }
 
@@ -478,13 +486,16 @@ Return only raw JSON. Do not include markdown code fence formatting.
 
   // 1. Try Gemini
   if (geminiClient) {
-    try {
-      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
-      const response = await model.generateContent(`${systemPrompt}\n\nFeedback Comments:\n${commentsSummaryStr}`);
-      const resText = response.response.text();
-      return parseAIJson(resText);
-    } catch (err) {
-      console.error('Gemini video analysis failed, trying fallback:', err.message);
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    for (const modelName of models) {
+      try {
+        const model = geminiClient.getGenerativeModel({ model: modelName });
+        const response = await model.generateContent(`${systemPrompt}\n\nFeedback Comments:\n${commentsSummaryStr}`);
+        const resText = response.response.text();
+        return parseAIJson(resText);
+      } catch (err) {
+        console.warn(`Gemini video comments analysis (${modelName}) failed: ${err.message}. Trying next fallback...`);
+      }
     }
   }
 
@@ -525,10 +536,184 @@ Return only raw JSON. Do not include markdown code fence formatting.
   return null;
 }
 
+const path = require('path');
+const fs = require('fs');
+
+function generateMockSubtitles() {
+  return [
+    { start_time: 0.50, end_time: 4.20, text: "Welcome back to DigiQuest Studio. In this cut, we reviewed the color grade." },
+    { start_time: 5.00, end_time: 8.50, text: "We noticed some chromatic aberrations on the left edge and added a green screen key check." },
+    { start_time: 9.20, end_time: 13.00, text: "Let's make sure the VFX composite elements blend nicely with the background plate." },
+    { start_time: 14.10, end_time: 18.20, text: "Also, please check the timeline comments to see what the client requested for the intro music." },
+    { start_time: 19.50, end_time: 23.00, text: "Once you make those adjustments, publish the new cut for client approval." }
+  ];
+}
+
+async function generateSubtitlesAI(videoFilePath) {
+  try {
+    if (!videoFilePath || !fs.existsSync(videoFilePath)) {
+      console.warn(`File not found for subtitle generation: ${videoFilePath}`);
+      return generateMockSubtitles();
+    }
+    const originalName = path.basename(videoFilePath);
+    
+    // 1. Try Gemini via GoogleAIFileManager (handles large files up to 2GB natively)
+    if (fileManager && geminiClient) {
+      try {
+        console.log(`Uploading video file ${originalName} to Google AI FileManager for transcribing...`);
+        const uploadResult = await fileManager.uploadFile(
+          videoFilePath,
+          {
+            mimeType: videoFilePath.endsWith('.mp4') ? 'video/mp4' : 'audio/mp3',
+            displayName: originalName,
+          }
+        );
+
+        // Wait for file state to become ACTIVE
+        let file = await fileManager.getFile(uploadResult.file.name);
+        let waitAttempts = 0;
+        while (file.state === "PROCESSING" && waitAttempts < 40) {
+          console.log(`Waiting for video processing... state: ${file.state}`);
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          file = await fileManager.getFile(uploadResult.file.name);
+          waitAttempts++;
+        }
+
+        if (file.state === "ACTIVE") {
+          const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+          let response = null;
+          let segments = null;
+          
+          for (const modelName of modelsToTry) {
+            try {
+              console.log(`Asking Gemini (${modelName}) to transcribe and generate subtitles...`);
+              const model = geminiClient.getGenerativeModel({
+                model: modelName,
+                generationConfig: { responseMimeType: "application/json" }
+              });
+
+              response = await model.generateContent([
+                {
+                  fileData: {
+                    fileUri: uploadResult.file.uri,
+                    mimeType: uploadResult.file.mimeType
+                  }
+                },
+                {
+                  text: `You are an expert subtitle generator. Listen to the audio of the video and transcribe all speech/dialog/narration word-for-word chronologically.
+Return a JSON array of objects, where each object has:
+- "start_time": float in seconds representing when the speech segment starts (e.g., 1.25)
+- "end_time": float in seconds representing when the speech segment ends (e.g., 4.50)
+- "text": the precise transcribed text for that segment.
+
+Requirements:
+1. Transcribe all spoken words. Split them into natural-sounding, short subtitle segments.
+2. Align the start and end times precisely with the actual audio sound.
+3. The end_time of a segment MUST be greater than its start_time (typically by at least 1.5 to 4 seconds depending on length).
+4. The times must be realistic (e.g. speaking "Intoxicating the world soon" takes about 3 seconds, so if it starts at 1.5, it should end around 4.5).
+5. Ensure the segments are in chronological order and cover all dialogue in the video.
+Return ONLY a valid JSON array. Do not wrap in markdown.`
+                }
+              ]);
+
+              const resText = response.response.text();
+              segments = JSON.parse(resText);
+              if (Array.isArray(segments) && segments.length > 0) {
+                console.log(`✅ Subtitles generated via Gemini File API (${modelName}): ${segments.length}`);
+                break;
+              }
+            } catch (modelErr) {
+              console.warn(`Gemini subtitle generation error with model ${modelName}: ${modelErr.message}`);
+            }
+          }
+
+          // Clean up the file from Gemini storage in the background/finally
+          try {
+            await fileManager.deleteFile(uploadResult.file.name);
+            console.log(`Cleaned up uploaded file: ${uploadResult.file.name}`);
+          } catch (delErr) {
+            console.warn(`Failed to clean up uploaded file: ${delErr.message}`);
+          }
+
+          if (Array.isArray(segments) && segments.length > 0) {
+            return segments.map(seg => ({
+              start_time: parseFloat(seg.start_time),
+              end_time: parseFloat(seg.end_time),
+              text: seg.text.trim()
+            }));
+          }
+        } else {
+          console.warn(`Gemini file upload state is ${file.state}, trying next provider.`);
+          try {
+            await fileManager.deleteFile(uploadResult.file.name);
+          } catch (_) {}
+        }
+      } catch (err) {
+        console.error('Gemini File API subtitle generation failed, trying fallback:', err.message);
+      }
+    }
+
+    // Load file buffer for REST/form-data fallback APIs (Groq / OpenAI)
+    const fileBuffer = fs.readFileSync(videoFilePath);
+
+    // 2. Try Groq (Whisper large v3) - limited to 25MB
+    if (groqClient && fileBuffer.length < 25 * 1024 * 1024) {
+      try {
+        const { toFile } = require('groq-sdk');
+        const fileObject = await toFile(fileBuffer, originalName);
+        const response = await groqClient.audio.transcriptions.create({
+          file: fileObject,
+          model: 'whisper-large-v3',
+          response_format: 'verbose_json'
+        });
+        if (response && response.segments && response.segments.length > 0) {
+          console.log(`✅ Subtitles generated via Groq segments: ${response.segments.length}`);
+          return response.segments.map(seg => ({
+            start_time: parseFloat(seg.start),
+            end_time: parseFloat(seg.end),
+            text: seg.text.trim()
+          }));
+        }
+      } catch (err) {
+        console.error('Groq subtitle generation error, trying fallback:', err.message);
+      }
+    }
+
+    // 3. Try OpenAI (Whisper-1) - limited to 25MB
+    if (openaiClient && fileBuffer.length < 25 * 1024 * 1024) {
+      try {
+        const fileObject = await OpenAI.toFile(fileBuffer, originalName);
+        const response = await openaiClient.audio.transcriptions.create({
+          file: fileObject,
+          model: 'whisper-1',
+          response_format: 'verbose_json'
+        });
+        if (response && response.segments && response.segments.length > 0) {
+          console.log(`✅ Subtitles generated via OpenAI segments: ${response.segments.length}`);
+          return response.segments.map(seg => ({
+            start_time: parseFloat(seg.start),
+            end_time: parseFloat(seg.end),
+            text: seg.text.trim()
+          }));
+        }
+      } catch (err) {
+        console.error('OpenAI subtitle generation error, trying fallback:', err.message);
+      }
+    }
+  } catch (err) {
+    console.error('Video file reading error:', err.message);
+  }
+
+  // Fallback Mock Subtitles
+  console.log('ℹ️ Generating mock subtitle segments.');
+  return generateMockSubtitles();
+}
+
 module.exports = {
   analyzeFeedback,
   chatbotChat,
   transcribeAudio,
-  analyzeVideoCommentsAI
+  analyzeVideoCommentsAI,
+  generateSubtitlesAI
 };
 

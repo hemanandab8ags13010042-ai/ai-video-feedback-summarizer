@@ -317,6 +317,18 @@ async function createTables() {
     )
   `);
 
+  // 17. VideoSubtitles Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS video_subtitles (
+      id ${idType},
+      version_id INT NOT NULL,
+      start_time DECIMAL(8, 2) NOT NULL,
+      end_time DECIMAL(8, 2) NOT NULL,
+      text ${textType} NOT NULL,
+      created_at ${datetimeDefault}
+    )
+  `);
+
   console.log('✅ All database tables verified and loaded successfully.');
 
   // Create default admin/user accounts for development convenience if table is empty
