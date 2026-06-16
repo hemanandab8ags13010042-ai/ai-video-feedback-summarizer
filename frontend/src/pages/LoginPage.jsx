@@ -18,6 +18,19 @@ export default function LoginPage() {
   
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
+  const [passwordErrors, setPasswordErrors] = useState([]);
+
+  // Password strength validation rules
+  const validatePassword = (pwd) => {
+    const rules = [
+      { test: pwd.length >= 8, msg: 'At least 8 characters' },
+      { test: /[A-Z]/.test(pwd), msg: 'One uppercase letter' },
+      { test: /[a-z]/.test(pwd), msg: 'One lowercase letter' },
+      { test: /[0-9]/.test(pwd), msg: 'One digit' },
+      { test: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd), msg: 'One special character (!@#$%...)' }
+    ];
+    return rules;
+  };
 
   useEffect(() => {
     if (searchParams.get('register') === 'true') {
@@ -56,6 +69,17 @@ export default function LoginPage() {
     if (!email || !password || (isRegister && !name)) {
       setFormError('Please fill out all fields.');
       return;
+    }
+
+    // Enforce password strength on registration
+    if (isRegister) {
+      const rules = validatePassword(password);
+      const failing = rules.filter(r => !r.test);
+      if (failing.length > 0) {
+        setFormError('Password does not meet strength requirements.');
+        setPasswordErrors(rules);
+        return;
+      }
     }
 
     setLoading(true);
@@ -181,13 +205,31 @@ export default function LoginPage() {
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (isRegister) setPasswordErrors(validatePassword(e.target.value));
+                  }}
                   placeholder="••••••••"
                   className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-1 transition-colors ${
                     isDark ? 'bg-[#0B0F19] border-slate-800 focus:border-violet-500 focus:ring-violet-500' : 'bg-slate-50 border-slate-200 focus:border-violet-500 focus:ring-violet-500'
                   }`}
                 />
               </div>
+              {/* Password Strength Indicator — only visible during registration */}
+              {isRegister && password.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {validatePassword(password).map((rule, idx) => (
+                    <div key={idx} className={`flex items-center gap-1.5 text-xs transition-colors ${
+                      rule.test
+                        ? 'text-emerald-400'
+                        : isDark ? 'text-slate-500' : 'text-slate-400'
+                    }`}>
+                      <span>{rule.test ? '✓' : '○'}</span>
+                      <span>{rule.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {isRegister && (

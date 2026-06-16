@@ -8,6 +8,7 @@ const fs = require('fs');
 const db = require('./config/db');
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy for correct client IP detection (Render, Vercel, Nginx)
 const PORT = process.env.PORT || 5000;
 const http = require('http');
 const socketIo = require('socket.io');
@@ -60,8 +61,22 @@ app.use(cors({
   credentials: true
 }));
 app.use(morgan('dev'));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// ────────────────────── SECURITY MIDDLEWARE ──────────────────────
+const helmet = require('helmet');
+const { apiLimiter } = require('./middleware/rateLimiter');
+const { sanitizeAllStrings } = require('./middleware/inputValidator');
+
+// Set security HTTP headers (XSS protection, content-type sniffing, etc.)
+app.use(helmet());
+
+// Global API rate limiter: 100 requests per minute per IP
+app.use('/api', apiLimiter);
+
+// Global XSS sanitization for all string fields in request bodies
+app.use(sanitizeAllStrings);
 
 // Serve local uploads folder statically
 const uploadsPath = path.join(__dirname, 'uploads');

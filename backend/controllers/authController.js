@@ -1,8 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkeyforfeedbacksummarizer';
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwtConfig');
 
 /**
  * Handle user registration
@@ -32,7 +31,7 @@ async function register(req, res) {
     const userId = result.insertId;
 
     // Generate JWT
-    const token = jwt.sign({ id: userId, role: validRole }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: userId, role: validRole }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
     res.status(201).json({
       message: 'Registration successful',
@@ -74,7 +73,7 @@ async function login(req, res) {
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email, role: user.role },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     res.json({

@@ -1,7 +1,6 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecretjwtkeyforfeedbacksummarizer';
+const { JWT_SECRET } = require('../config/jwtConfig');
 
 /**
  * Main auth middleware to verify JWT token

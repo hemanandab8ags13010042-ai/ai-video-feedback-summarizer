@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 const { authenticateToken, requireRole } = require('../middleware/authMiddleware');
+const { validateTask } = require('../middleware/inputValidator');
 
 // Authenticate all routes
 router.use(authenticateToken);
@@ -9,11 +10,11 @@ router.use(authenticateToken);
 // GET /api/tasks - Retrieve task list (filtered by project or scope)
 router.get('/', taskController.getTasks);
 
-// POST /api/tasks - Create task manually (PM/Admin only)
-router.post('/', requireRole(['pm', 'admin']), taskController.createTask);
+// POST /api/tasks - Create task manually (PM/Admin only) — with input validation
+router.post('/', requireRole(['pm', 'admin']), validateTask, taskController.createTask);
 
-// PUT /api/tasks/:id - Update task details, status, or notes
-router.put('/:id', taskController.updateTask);
+// PUT /api/tasks/:id - Update task details, status, or notes — with input validation
+router.put('/:id', validateTask, taskController.updateTask);
 
 // GET /api/tasks/:id/history - Retrieve history log for audits
 router.get('/:id/history', taskController.getTaskHistory);
