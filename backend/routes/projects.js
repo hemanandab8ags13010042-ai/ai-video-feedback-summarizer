@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const projectController = require('../controllers/projectController');
 const { authenticateToken, requireRole } = require('../middleware/authMiddleware');
-const { validateProject } = require('../middleware/inputValidator');
+const { validateProjectCreate, validateProjectUpdate } = require('../middleware/inputValidator');
 
 // All project routes require authentication
 router.use(authenticateToken);
@@ -14,9 +14,9 @@ router.get('/', projectController.getProjects);
 router.get('/:id', projectController.getProjectById);
 
 // POST /api/projects - Create project (PM/Admin only) — with input validation
-router.post('/', requireRole(['pm', 'admin']), validateProject, projectController.createProject);
+router.post('/', requireRole(['pm', 'admin']), validateProjectCreate, projectController.createProject);
 
 // PUT /api/projects/:id - Update project (PM/Admin only) — with input validation
-router.put('/:id', requireRole(['pm', 'admin']), validateProject, projectController.updateProject);
+router.put('/:id', requireRole(['pm', 'admin']), validateProjectUpdate, projectController.updateProject);
 
 module.exports = router;

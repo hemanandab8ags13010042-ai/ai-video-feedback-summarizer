@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const taskController = require('../controllers/taskController');
 const { authenticateToken, requireRole } = require('../middleware/authMiddleware');
-const { validateTask } = require('../middleware/inputValidator');
+const { validateTaskCreate, validateTaskUpdate } = require('../middleware/inputValidator');
 
 // Authenticate all routes
 router.use(authenticateToken);
@@ -11,10 +11,10 @@ router.use(authenticateToken);
 router.get('/', taskController.getTasks);
 
 // POST /api/tasks - Create task manually (PM/Admin only) — with input validation
-router.post('/', requireRole(['pm', 'admin']), validateTask, taskController.createTask);
+router.post('/', requireRole(['pm', 'admin']), validateTaskCreate, taskController.createTask);
 
 // PUT /api/tasks/:id - Update task details, status, or notes — with input validation
-router.put('/:id', validateTask, taskController.updateTask);
+router.put('/:id', validateTaskUpdate, taskController.updateTask);
 
 // GET /api/tasks/:id/history - Retrieve history log for audits
 router.get('/:id/history', taskController.getTaskHistory);

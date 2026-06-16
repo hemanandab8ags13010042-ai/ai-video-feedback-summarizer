@@ -70,7 +70,7 @@ const validateLogin = [
 /**
  * Validators for project creation
  */
-const validateProject = [
+const validateProjectCreate = [
   body('name')
     .trim()
     .notEmpty().withMessage('Project name is required.')
@@ -93,12 +93,64 @@ const validateProject = [
 ];
 
 /**
+ * Validators for project update
+ */
+const validateProjectUpdate = [
+  body('name')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('Project name cannot be empty.')
+    .isLength({ min: 1, max: 200 }).withMessage('Project name must be between 1 and 200 characters.')
+    .customSanitizer(value => xss(value)),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 2000 }).withMessage('Description must be under 2000 characters.')
+    .customSanitizer(value => xss(value)),
+  body('client_name')
+    .optional()
+    .trim()
+    .isLength({ max: 200 }).withMessage('Client name must be under 200 characters.')
+    .customSanitizer(value => xss(value)),
+  body('deadline')
+    .optional()
+    .isISO8601().withMessage('Deadline must be a valid date format.'),
+  handleValidationErrors
+];
+
+/**
  * Validators for task creation
  */
-const validateTask = [
+const validateTaskCreate = [
   body('title')
     .trim()
     .notEmpty().withMessage('Task title is required.')
+    .isLength({ min: 1, max: 300 }).withMessage('Task title must be between 1 and 300 characters.')
+    .customSanitizer(value => xss(value)),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 5000 }).withMessage('Task description must be under 5000 characters.')
+    .customSanitizer(value => xss(value)),
+  body('status')
+    .optional()
+    .isIn(['new', 'assigned', 'in_progress', 'review', 'completed'])
+    .withMessage('Invalid task status.'),
+  body('priority')
+    .optional()
+    .isIn(['low', 'medium', 'high', 'critical'])
+    .withMessage('Invalid priority level.'),
+  handleValidationErrors
+];
+
+/**
+ * Validators for task update
+ */
+const validateTaskUpdate = [
+  body('title')
+    .optional()
+    .trim()
+    .notEmpty().withMessage('Task title cannot be empty.')
     .isLength({ min: 1, max: 300 }).withMessage('Task title must be between 1 and 300 characters.')
     .customSanitizer(value => xss(value)),
   body('description')
@@ -153,8 +205,10 @@ function sanitizeAllStrings(req, res, next) {
 module.exports = {
   validateRegister,
   validateLogin,
-  validateProject,
-  validateTask,
+  validateProjectCreate,
+  validateProjectUpdate,
+  validateTaskCreate,
+  validateTaskUpdate,
   validateFeedback,
   sanitizeAllStrings,
   handleValidationErrors
