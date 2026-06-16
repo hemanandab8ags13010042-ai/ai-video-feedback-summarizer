@@ -257,10 +257,14 @@ async function getVersionDetails(req, res) {
       [versionId]
     );
 
-    // Fetch other sibling versions for comparison tabs
+    // Fetch other sibling versions in the same project for comparison
     const siblingVersions = await db.query(
-      'SELECT id, version_number, status, created_at FROM video_versions WHERE video_id = ? ORDER BY created_at ASC',
-      [version.video_id]
+      `SELECT vv.id, vv.version_number, vv.status, vv.created_at, v.title as video_title 
+       FROM video_versions vv 
+       INNER JOIN videos v ON vv.video_id = v.id 
+       WHERE v.project_id = ? 
+       ORDER BY vv.created_at ASC`,
+      [version.project_id]
     );
 
     res.json({

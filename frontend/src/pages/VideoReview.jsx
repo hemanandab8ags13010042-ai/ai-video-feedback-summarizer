@@ -1183,8 +1183,12 @@ export default function VideoReview() {
                     }`}
                   >
                     <option value="">Select Cut...</option>
-                    {siblingVersions.map((v) => (
-                      <option key={v.id} value={v.id}>{v.version_number} cut</option>
+                    {siblingVersions
+                      .filter(v => v.id.toString() !== versionId.toString())
+                      .map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.video_title ? `${v.video_title} (${v.version_number})` : `${v.version_number} cut`}
+                        </option>
                     ))}
                   </select>
                 )}
