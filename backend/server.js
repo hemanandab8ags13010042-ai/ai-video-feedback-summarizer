@@ -70,7 +70,10 @@ const { apiLimiter } = require('./middleware/rateLimiter');
 const { sanitizeAllStrings } = require('./middleware/inputValidator');
 
 // Set security HTTP headers (XSS protection, content-type sniffing, etc.)
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
 
 // Global API rate limiter: 100 requests per minute per IP
 app.use('/api', apiLimiter);
