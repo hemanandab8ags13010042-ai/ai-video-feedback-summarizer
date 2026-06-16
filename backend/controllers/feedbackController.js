@@ -65,7 +65,7 @@ async function analyzeFeedback(req, res) {
     const feedbackId = feedbackResult.insertId;
 
     // 4. Fetch all team members for assignment matching
-    const teamMembers = await db.query('SELECT id, name, role FROM users WHERE role IN ("editor", "vfx_artist")');
+    const teamMembers = await db.query("SELECT id, name, role FROM users WHERE role IN ('editor', 'vfx_artist')");
 
     // 5. Invoke AI Engine
     // Pass the text content and/or file buffers for multimodality

@@ -127,12 +127,12 @@ async function submitApproval(req, res) {
     if (status === 'approved') {
       // If it is the final approved version, complete the project
       await db.query(
-        'UPDATE projects SET status = "completed", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        "UPDATE projects SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [version.project_id]
       );
       
       // Notify PMs and staff of completion
-      const pms = await db.query('SELECT id FROM users WHERE role IN ("pm", "admin")');
+      const pms = await db.query("SELECT id FROM users WHERE role IN ('pm', 'admin')");
       for (const pm of pms) {
         await notificationService.sendNotification(
           pm.id,
@@ -144,14 +144,14 @@ async function submitApproval(req, res) {
     } else {
       // Revision Required
       await db.query(
-        'UPDATE projects SET status = "editing", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        "UPDATE projects SET status = 'editing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [version.project_id]
       );
 
       const staff = await db.query(`
         SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
         UNION
-        SELECT id FROM users WHERE role IN ("pm", "admin")
+        SELECT id FROM users WHERE role IN ('pm', 'admin')
       `, [version.project_id]);
 
       for (const st of staff) {

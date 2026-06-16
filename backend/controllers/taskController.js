@@ -151,7 +151,7 @@ async function updateTask(req, res) {
       const projects = await db.query('SELECT name FROM projects WHERE id = ?', [currentTask.project_id]);
       const projectName = projects[0]?.name || 'Project';
       
-      const managers = await db.query('SELECT id FROM users WHERE role IN ("pm", "admin")');
+      const managers = await db.query("SELECT id FROM users WHERE role IN ('pm', 'admin')");
       for (const mgr of managers) {
         await notificationService.sendNotification(
           mgr.id,
