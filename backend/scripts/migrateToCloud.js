@@ -186,23 +186,41 @@ async function migrate() {
       console.warn(`   Warning clearing MySQL table "${table}":`, err.message);
     }
 
+    // Fetch columns of the target MySQL table
+    let validColumns = [];
+    try {
+      const columnsInfo = await mysqlQuery(`DESCRIBE ${table}`);
+      validColumns = columnsInfo.map(col => col.Field);
+    } catch (err) {
+      console.warn(`   Warning getting columns for MySQL table "${table}":`, err.message);
+      continue;
+    }
+
     // Insert rows
+    let migratedCount = 0;
     for (const row of sqliteRows) {
-      const keys = Object.keys(row);
-      const values = Object.values(row).map(val => {
-        // SQLite stores boolean/JSON as strings sometimes, or we convert object/date formats if needed
-        return val;
+      const filteredRow = {};
+      validColumns.forEach(col => {
+        if (row[col] !== undefined) {
+          filteredRow[col] = row[col];
+        }
       });
+
+      const keys = Object.keys(filteredRow);
+      const values = Object.values(filteredRow);
+      if (keys.length === 0) continue;
+
       const placeholders = keys.map(() => '?').join(', ');
       
       const insertSql = `INSERT INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`;
       try {
         await mysqlPool.query(insertSql, values);
+        migratedCount++;
       } catch (err) {
         console.error(`   Error inserting into MySQL table "${table}":`, err.message);
       }
     }
-    console.log(`   Successfully migrated ${sqliteRows.length} rows to MySQL.`);
+    console.log(`   Successfully migrated ${migratedCount} rows to MySQL.`);
   }
 
   console.log('🎉 Migration completed successfully!');
