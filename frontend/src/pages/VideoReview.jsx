@@ -36,6 +36,11 @@ export default function VideoReview() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
 
+  // Resume progress notification states
+  const [showResumeToast, setShowResumeToast] = useState(false);
+  const [resumeTime, setResumeTime] = useState(0);
+  const lastSavedTimeRef = useRef(0);
+
   // Comparison player states
   const [isComparing, setIsComparing] = useState(false);
   const [compareVersionId, setCompareVersionId] = useState('');
@@ -250,16 +255,6 @@ export default function VideoReview() {
     }
   }, [currentTime, subtitles]);
 
-  // Restore player progress
-  useEffect(() => {
-    if (videoRef.current) {
-      const savedProgress = localStorage.getItem(`video_progress_${versionId}`);
-      if (savedProgress) {
-        videoRef.current.currentTime = parseFloat(savedProgress);
-      }
-    }
-  }, [loading]);
-
   // Canvas context scaling setup
   useEffect(() => {
     const handleResize = () => {
@@ -395,19 +390,50 @@ export default function VideoReview() {
         }
       }
       
-      // Auto save progress every 5 seconds
-      localStorage.setItem(`video_progress_${versionId}`, curr.toString());
+      // Auto save progress every 3 seconds to reduce write frequency
+      if (Math.abs(curr - lastSavedTimeRef.current) >= 3) {
+        localStorage.setItem(`video_progress_${versionId}`, curr.toString());
+        lastSavedTimeRef.current = curr;
+      }
     }
   };
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
-      setDuration(videoRef.current.duration);
+      const dur = videoRef.current.duration;
+      setDuration(dur);
       const width = videoRef.current.videoWidth;
       const height = videoRef.current.videoHeight;
       if (width && height) {
         setVideoAspectRatio(`${width}/${height}`);
       }
+
+      // Restore player progress on metadata load (ensuring browser is ready)
+      const savedProgress = localStorage.getItem(`video_progress_${versionId}`);
+      if (savedProgress) {
+        const time = parseFloat(savedProgress);
+        // Only resume if it's past the first 2 seconds and not at the very end
+        if (time > 2 && time < dur - 2) {
+          videoRef.current.currentTime = time;
+          setCurrentTime(time);
+          setResumeTime(time);
+          setShowResumeToast(true);
+          
+          // Auto-hide resume notification after 5 seconds
+          const timer = setTimeout(() => setShowResumeToast(false), 5000);
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  };
+
+  const handleRestartVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      setCurrentTime(0);
+      localStorage.setItem(`video_progress_${versionId}`, '0');
+      lastSavedTimeRef.current = 0;
+      setShowResumeToast(false);
     }
   };
 
@@ -944,6 +970,26 @@ export default function VideoReview() {
                     onMouseMove={handlePlayerMouseMove}
                     onMouseLeave={handlePlayerMouseLeave}
                   >
+                    {/* Resume Playback Toast overlay */}
+                    {showResumeToast && (
+                      <div className="absolute top-4 left-4 right-4 z-50 flex justify-center">
+                        <div className="bg-slate-900/95 border border-violet-500/30 text-white px-4 py-2.5 rounded-lg shadow-2xl backdrop-blur-md flex items-center justify-between gap-4 max-w-sm w-full animate-in fade-in slide-in-from-top-2 duration-300">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-violet-400 shrink-0" />
+                            <span className="text-[11px] text-slate-200 font-medium">
+                              Resumed from {formatTime(resumeTime)}.
+                            </span>
+                          </div>
+                          <button
+                            onClick={handleRestartVideo}
+                            className="text-[10px] font-bold text-violet-400 hover:text-violet-300 transition-colors uppercase tracking-wider pl-2.5 border-l border-slate-800 shrink-0"
+                          >
+                            Restart
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <video
                       ref={videoRef}
                       src={version?.file_url.startsWith('http') ? version.file_url : `${BASE_URL}${version.file_url}`}
