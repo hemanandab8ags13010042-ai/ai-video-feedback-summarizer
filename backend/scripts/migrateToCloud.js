@@ -146,21 +146,24 @@ async function migrate() {
   console.log('⚙️ Initializing MySQL database tables...');
   await dbConfig.initDB();
 
-  // List of tables to migrate
   const tables = [
     'users',
     'projects',
+    'feedback',
+    'tasks',
+    'task_history',
+    'notifications',
+    'reports',
+    'ai_results',
+    'activity_logs',
     'videos',
     'video_versions',
     'feedback_comments',
     'feedback_annotations',
     'voice_feedback',
-    'tasks',
-    'task_history',
-    'notifications',
-    'activity_logs',
+    'approvals',
     'ai_summaries',
-    'reports_history'
+    'video_subtitles'
   ];
 
   for (const table of tables) {
