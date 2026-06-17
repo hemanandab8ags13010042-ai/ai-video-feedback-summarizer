@@ -39,15 +39,17 @@ async function sendNotification(userId, title, message, type = 'in_app') {
   }
 }
 
-/**
- * Trigger alerts for specific events
- */
 async function triggerNewFeedbackAlert(projectId, projectName, clientName) {
-  // Notify PMs and Admins
-  const managers = await db.query("SELECT id FROM users WHERE role IN ('pm', 'admin')");
-  for (const mgr of managers) {
+  // Notify PMs, Admins, and all team members assigned to tasks on this project
+  const recipients = await db.query(`
+    SELECT id FROM users WHERE role IN ('pm', 'admin')
+    UNION
+    SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
+  `, [projectId]);
+
+  for (const r of recipients) {
     await sendNotification(
-      mgr.id,
+      r.id,
       `New Feedback on ${projectName}`,
       `Client ${clientName} submitted new feedback for project "${projectName}". AI analysis is ready for review.`,
       'in_app'
@@ -103,10 +105,29 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
   }
 }
 
+async function triggerNewCommentAlert(projectId, projectName, commenterName, commentText) {
+  // Notify all managers and staff assigned to tasks on this project
+  const recipients = await db.query(`
+    SELECT id FROM users WHERE role IN ('pm', 'admin')
+    UNION
+    SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
+  `, [projectId]);
+
+  for (const r of recipients) {
+    await sendNotification(
+      r.id,
+      `New Comment on ${projectName}`,
+      `User ${commenterName} added a comment on project "${projectName}": "${commentText}"`,
+      'in_app'
+    );
+  }
+}
+
 module.exports = {
   sendNotification,
   triggerNewFeedbackAlert,
   triggerTaskAssignedAlert,
   triggerDeadlineNearAlert,
-  triggerProjectCompletedAlert
+  triggerProjectCompletedAlert,
+  triggerNewCommentAlert
 };

@@ -72,6 +72,11 @@ async function addComment(req, res) {
       ]
     );
 
+    // 6. Trigger New Comment Alert
+    const projectRows = await db.query('SELECT name FROM projects WHERE id = ?', [version.project_id]);
+    const projectName = projectRows[0]?.name || 'Project';
+    await notificationService.triggerNewCommentAlert(version.project_id, projectName, req.user.name, comment);
+
     res.status(201).json({
       message: 'Comment added successfully.',
       commentId,
@@ -131,15 +136,22 @@ async function submitApproval(req, res) {
         [version.project_id]
       );
       
-      // Notify PMs and staff of completion
-      const pms = await db.query("SELECT id FROM users WHERE role IN ('pm', 'admin')");
-      for (const pm of pms) {
-        await notificationService.sendNotification(
-          pm.id,
-          `🎉 Video Approved & Project Completed: ${version.project_name}`,
-          `Client approved version "${version.version_number}" of video "${version.video_title}". Project marked complete.`,
-          'whatsapp'
-        );
+      // Notify PMs, Admins and staff of completion
+      const staff = await db.query(`
+        SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
+        UNION
+        SELECT id FROM users WHERE role IN ('pm', 'admin')
+      `, [version.project_id]);
+
+      for (const st of staff) {
+        if (st.id) {
+          await notificationService.sendNotification(
+            st.id,
+            `🎉 Video Approved & Project Completed: ${version.project_name}`,
+            `Client approved version "${version.version_number}" of video "${version.video_title}". Project marked complete.`,
+            'whatsapp'
+          );
+        }
       }
     } else {
       // Revision Required

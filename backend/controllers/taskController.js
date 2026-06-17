@@ -147,14 +147,22 @@ async function updateTask(req, res) {
         [taskId, req.user.id, currentTask.status, updatedStatus, comment || `Status updated to "${updatedStatus}".`]
       );
 
-      // Notify PMs/Managers on task updates (especially if completed)
+      // Notify PMs/Managers and the task assignee on task updates
       const projects = await db.query('SELECT name FROM projects WHERE id = ?', [currentTask.project_id]);
       const projectName = projects[0]?.name || 'Project';
       
+      const recipients = new Set();
       const managers = await db.query("SELECT id FROM users WHERE role IN ('pm', 'admin')");
       for (const mgr of managers) {
+        recipients.add(mgr.id);
+      }
+      if (currentTask.assigned_to) {
+        recipients.add(currentTask.assigned_to);
+      }
+
+      for (const recipientId of recipients) {
         await notificationService.sendNotification(
-          mgr.id,
+          recipientId,
           `Task Status Updated: ${updatedTitle}`,
           `Task "${updatedTitle}" on project "${projectName}" was moved from "${currentTask.status}" to "${updatedStatus}" by ${req.user.name}.`,
           'in_app'
