@@ -67,7 +67,6 @@ export default function DrawingToolbar({ versionId, isDark, onClearCanvas }) {
             >
               <option value="free">Pen Brush</option>
               <option value="circle">Circle</option>
-              <option value="arrow">Arrow</option>
             </select>
           </div>
         )}
