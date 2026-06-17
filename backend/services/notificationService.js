@@ -42,12 +42,10 @@ async function sendNotification(userId, title, message, type = 'in_app', attachm
 }
 
 async function triggerNewFeedbackAlert(projectId, projectName, clientName) {
-  // Notify PMs, Admins, and all team members assigned to tasks on this project
+  // Notify all studio staff members (PMs, Admins, Editors, and VFX Artists)
   const recipients = await db.query(`
-    SELECT id FROM users WHERE role IN ('pm', 'admin')
-    UNION
-    SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
-  `, [projectId]);
+    SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
+  `);
 
   // 1. Fetch AI Results to attach PDF if available
   let attachments = [];
@@ -102,11 +100,10 @@ async function triggerTaskAssignedAlert(taskId, taskTitle, userId, projectName) 
 }
 
 async function triggerDeadlineNearAlert(projectId, projectName, daysLeft) {
+  // Notify all studio staff members
   const team = await db.query(`
-    SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
-    UNION
-    SELECT DISTINCT id FROM users WHERE role IN ('pm', 'admin')
-  `, [projectId]);
+    SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
+  `);
 
   for (const member of team) {
     if (member.id) {
@@ -157,7 +154,7 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
   const clientName = projects[0]?.client_name || '';
 
   const recipients = await db.query(`
-    SELECT id FROM users WHERE role IN ('pm', 'admin')
+    SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
     UNION
     SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'
   `, [clientName, clientName]);
@@ -174,14 +171,12 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
 }
 
 async function triggerNewCommentAlert(projectId, projectName, commenterName, commentText) {
-  // Notify all managers, staff assigned to tasks, and the project's client
+  // Notify all managers, staff, and the project's client
   const projects = await db.query('SELECT client_name FROM projects WHERE id = ?', [projectId]);
   const clientName = projects[0]?.client_name || '';
 
   const recipients = await db.query(`
-    SELECT id FROM users WHERE role IN ('pm', 'admin')
-    UNION
-    SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
+    SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
     UNION
     SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'
   `, [clientName, clientName]);
