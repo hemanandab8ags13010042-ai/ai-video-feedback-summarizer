@@ -168,6 +168,24 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
       attachments
     );
   }
+
+  // Fallback for unregistered client email
+  if (clientName && clientName.includes('@')) {
+    const registeredClients = await db.query(
+      "SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'",
+      [clientName, clientName]
+    );
+    if (registeredClients.length === 0) {
+      const emailService = require('./emailService');
+      await emailService.sendNotificationEmail(
+        clientName.trim(),
+        `🎉 Project Completed: ${projectName}`,
+        `All revision tasks for project "${projectName}" have been marked complete and approved.`,
+        '',
+        attachments
+      );
+    }
+  }
 }
 
 async function triggerNewCommentAlert(projectId, projectName, commenterName, commentText) {
@@ -189,6 +207,60 @@ async function triggerNewCommentAlert(projectId, projectName, commenterName, com
       'in_app'
     );
   }
+
+  // Fallback for unregistered client email
+  if (clientName && clientName.includes('@')) {
+    const registeredClients = await db.query(
+      "SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'",
+      [clientName, clientName]
+    );
+    if (registeredClients.length === 0) {
+      const emailService = require('./emailService');
+      await emailService.sendNotificationEmail(
+        clientName.trim(),
+        `New Comment on ${projectName}`,
+        `User ${commenterName} added a comment on project "${projectName}": "${commentText}"`
+      );
+    }
+  }
+}
+
+async function triggerProjectStatusUpdatedAlert(projectId, projectName, oldStatus, newStatus) {
+  if (oldStatus === newStatus) return;
+
+  const projects = await db.query('SELECT client_name FROM projects WHERE id = ?', [projectId]);
+  const clientName = projects[0]?.client_name || '';
+
+  const recipients = await db.query(`
+    SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
+    UNION
+    SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'
+  `, [clientName, clientName]);
+
+  for (const r of recipients) {
+    await sendNotification(
+      r.id,
+      `Project Status Updated: ${projectName}`,
+      `The pipeline status for project "${projectName}" has been updated from "${oldStatus.toUpperCase()}" to "${newStatus.toUpperCase()}".`,
+      'email'
+    );
+  }
+
+  // Fallback for unregistered client email
+  if (clientName && clientName.includes('@')) {
+    const registeredClients = await db.query(
+      "SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'",
+      [clientName, clientName]
+    );
+    if (registeredClients.length === 0) {
+      const emailService = require('./emailService');
+      await emailService.sendNotificationEmail(
+        clientName.trim(),
+        `Project Status Updated: ${projectName}`,
+        `The pipeline status for project "${projectName}" has been updated from "${oldStatus.toUpperCase()}" to "${newStatus.toUpperCase()}".`
+      );
+    }
+  }
 }
 
 module.exports = {
@@ -197,5 +269,6 @@ module.exports = {
   triggerTaskAssignedAlert,
   triggerDeadlineNearAlert,
   triggerProjectCompletedAlert,
-  triggerNewCommentAlert
+  triggerNewCommentAlert,
+  triggerProjectStatusUpdatedAlert
 };

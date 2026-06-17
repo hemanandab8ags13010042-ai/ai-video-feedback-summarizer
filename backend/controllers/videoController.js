@@ -55,14 +55,21 @@ async function uploadVideo(req, res) {
     // Find client ID or name matching the project's client_name (by name or email)
     const clients = await db.query("SELECT id, email FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'", [project.client_name, project.client_name]);
     
+    const alertMsg = `Your video "${title}" (${verNumber}) is ready for review. Click here to watch and provide timestamp feedback: ${reviewLink}`;
     if (clients.length > 0) {
       const client = clients[0];
-      const alertMsg = `Your video "${title}" (${verNumber}) is ready for review. Click here to watch and provide timestamp feedback: ${reviewLink}`;
       await notificationService.sendNotification(
         client.id,
         `🎬 Video Ready for Review: ${title} (${verNumber})`,
         alertMsg,
         'email'
+      );
+    } else if (project.client_name && project.client_name.includes('@')) {
+      const emailService = require('../services/emailService');
+      await emailService.sendNotificationEmail(
+        project.client_name.trim(),
+        `🎬 Video Ready for Review: ${title} (${verNumber})`,
+        alertMsg
       );
     }
 
@@ -131,13 +138,21 @@ async function uploadNewVersion(req, res) {
 
     // 5. Notify Client
     const clients = await db.query("SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'", [project.client_name, project.client_name]);
+    const revisionMsg = `A new version (${version_number}) is ready for review. Click here to watch: ${reviewLink}`;
     if (clients.length > 0) {
       const client = clients[0];
       await notificationService.sendNotification(
         client.id,
         `🔄 New Revision Uploaded: ${video.title} (${version_number})`,
-        `A new version (${version_number}) is ready for review. Click here to watch: ${reviewLink}`,
+        revisionMsg,
         'whatsapp'
+      );
+    } else if (project.client_name && project.client_name.includes('@')) {
+      const emailService = require('../services/emailService');
+      await emailService.sendNotificationEmail(
+        project.client_name.trim(),
+        `🔄 New Revision Uploaded: ${video.title} (${version_number})`,
+        revisionMsg
       );
     }
 

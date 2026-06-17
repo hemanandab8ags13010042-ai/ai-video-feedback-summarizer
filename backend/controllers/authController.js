@@ -30,6 +30,25 @@ async function register(req, res) {
 
     const userId = result.insertId;
 
+    // Trigger welcome notification email
+    try {
+      const notificationService = require('../services/notificationService');
+      let roleText = 'client';
+      if (validRole === 'editor') roleText = 'video editor';
+      else if (validRole === 'vfx_artist') roleText = 'VFX artist';
+      else if (validRole === 'pm') roleText = 'production manager';
+      else if (validRole === 'admin') roleText = 'administrator';
+
+      await notificationService.sendNotification(
+        userId,
+        `👋 Welcome to DigiQuest Studio!`,
+        `Hi ${name},\n\nThank you for signing up as a ${roleText}. Your workspace account has been successfully configured to receive automated email alerts for video cut reviews, comments, tasks, and project completions.`,
+        'email'
+      );
+    } catch (notifErr) {
+      console.error('Failed to dispatch welcome registration email:', notifErr.message);
+    }
+
     // Generate JWT
     const token = jwt.sign({ id: userId, role: validRole }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 

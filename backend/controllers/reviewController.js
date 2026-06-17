@@ -129,12 +129,20 @@ async function submitApproval(req, res) {
     );
 
     // 4. Update overall project status if applicable
+    const projectStatusRes = await db.query('SELECT status FROM projects WHERE id = ?', [version.project_id]);
+    const oldProjectStatus = projectStatusRes[0]?.status || 'draft';
+
     if (status === 'approved') {
       // If it is the final approved version, complete the project
       await db.query(
         "UPDATE projects SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [version.project_id]
       );
+
+      if (oldProjectStatus !== 'completed') {
+        const { triggerProjectCompletedAlert } = require('../services/notificationService');
+        await triggerProjectCompletedAlert(version.project_id, version.project_name);
+      }
       
       // Notify PMs, Admins and staff of completion
       const staff = await db.query(`
@@ -159,6 +167,11 @@ async function submitApproval(req, res) {
         "UPDATE projects SET status = 'editing', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [version.project_id]
       );
+
+      if (oldProjectStatus !== 'editing') {
+        const { triggerProjectStatusUpdatedAlert } = require('../services/notificationService');
+        await triggerProjectStatusUpdatedAlert(version.project_id, version.project_name, oldProjectStatus, 'editing');
+      }
 
       const staff = await db.query(`
         SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL

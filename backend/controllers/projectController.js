@@ -21,6 +21,33 @@ async function createProject(req, res) {
 
     const projectId = result.insertId;
 
+    // Trigger Notification for project creation
+    try {
+      const notificationService = require('../services/notificationService');
+      const clients = await db.query(
+        "SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'",
+        [client_name, client_name]
+      );
+      if (clients.length > 0) {
+        const client = clients[0];
+        await notificationService.sendNotification(
+          client.id,
+          `📁 New Project Setup: ${name}`,
+          `A new video feedback project "${name}" has been created for you. You can now log in to access the reviews pipeline.`,
+          'email'
+        );
+      } else if (client_name && client_name.includes('@')) {
+        const emailService = require('../services/emailService');
+        await emailService.sendNotificationEmail(
+          client_name.trim(),
+          `📁 New Project Setup: ${name}`,
+          `A new video feedback project "${name}" has been created for you on DigiQuest Studio. Once you register using this email, you will be able to review video cuts, track tasks, and submit revisions.`
+        );
+      }
+    } catch (notifErr) {
+      console.error('Failed to notify client on project creation:', notifErr.message);
+    }
+
     // Log activity
     await db.query(
       'INSERT INTO activity_logs (project_id, user_id, activity_type, description) VALUES (?, ?, ?, ?)',
@@ -159,10 +186,14 @@ async function updateProject(req, res) {
       [newName, newClient, newType, newDeadline, newPriority, newStatus, projectId]
     );
 
-    // Trigger Notification for completion if applicable
-    if (newStatus === 'completed' && current.status !== 'completed') {
-      const { triggerProjectCompletedAlert } = require('../services/notificationService');
-      await triggerProjectCompletedAlert(projectId, newName);
+    // Trigger Notification for completion or status changes
+    if (current.status !== newStatus) {
+      const { triggerProjectStatusUpdatedAlert, triggerProjectCompletedAlert } = require('../services/notificationService');
+      if (newStatus === 'completed') {
+        await triggerProjectCompletedAlert(projectId, newName);
+      } else {
+        await triggerProjectStatusUpdatedAlert(projectId, newName, current.status, newStatus);
+      }
     }
 
     // Log Activity
