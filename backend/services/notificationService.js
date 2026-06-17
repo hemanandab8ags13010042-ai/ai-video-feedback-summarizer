@@ -121,15 +121,6 @@ async function triggerDeadlineNearAlert(projectId, projectName, daysLeft) {
 }
 
 async function triggerProjectCompletedAlert(projectId, projectName) {
-  // Notify Clients and Managers
-  const recipients = await db.query(`
-    SELECT id FROM users WHERE role IN ('pm', 'admin')
-    UNION
-    SELECT DISTINCT u.id FROM users u 
-    INNER JOIN feedback f ON u.id = f.user_id 
-    WHERE f.project_id = ? AND u.role = 'client'
-  `, [projectId]);
-
   // Generate Project Completion Report PDF
   let attachments = [];
   try {
@@ -161,6 +152,16 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
     console.error('Failed to generate completion report PDF:', err.message);
   }
 
+  // Notify Clients and Managers
+  const projects = await db.query('SELECT client_name FROM projects WHERE id = ?', [projectId]);
+  const clientName = projects[0]?.client_name || '';
+
+  const recipients = await db.query(`
+    SELECT id FROM users WHERE role IN ('pm', 'admin')
+    UNION
+    SELECT id FROM users WHERE name = ? AND role = 'client'
+  `, [clientName]);
+
   for (const r of recipients) {
     await sendNotification(
       r.id,
@@ -173,12 +174,17 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
 }
 
 async function triggerNewCommentAlert(projectId, projectName, commenterName, commentText) {
-  // Notify all managers and staff assigned to tasks on this project
+  // Notify all managers, staff assigned to tasks, and the project's client
+  const projects = await db.query('SELECT client_name FROM projects WHERE id = ?', [projectId]);
+  const clientName = projects[0]?.client_name || '';
+
   const recipients = await db.query(`
     SELECT id FROM users WHERE role IN ('pm', 'admin')
     UNION
     SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
-  `, [projectId]);
+    UNION
+    SELECT id FROM users WHERE name = ? AND role = 'client'
+  `, [clientName]);
 
   for (const r of recipients) {
     await sendNotification(
