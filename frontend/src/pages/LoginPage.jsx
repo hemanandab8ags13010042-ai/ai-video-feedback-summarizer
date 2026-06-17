@@ -42,11 +42,11 @@ export default function LoginPage() {
 
   // Pre-seeded developer accounts
   const seedAccounts = [
-    { label: 'Admin', email: 'admin@studio.com', pass: 'admin123' },
-    { label: 'Prod Manager', email: 'pm@studio.com', pass: 'pm123' },
-    { label: 'Client', email: 'client@studio.com', pass: 'client123' },
-    { label: 'Editor', email: 'editor@studio.com', pass: 'editor123' },
-    { label: 'VFX Artist', email: 'vfx@studio.com', pass: 'vfx123' }
+    { label: 'Admin', email: 'hemanandab8ags13010042@gmail.com', pass: 'admin123' },
+    { label: 'Prod Manager', email: 'boreddymaheswarareddy999@gmail.com', pass: 'pm123' },
+    { label: 'Client', email: 'hemu29799@gmail.com', pass: 'client123' },
+    { label: 'Editor', email: 'hemu36586@gmail.com', pass: 'editor123' },
+    { label: 'VFX Artist', email: 'jaswanthben87@gmail.com', pass: 'vfx123' }
   ];
 
   const handleSeedLogin = async (emailAddr, passCode) => {

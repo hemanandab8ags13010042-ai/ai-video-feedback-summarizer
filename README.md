@@ -58,11 +58,11 @@ The app will start at:
 
 ## Demo Developer Accounts (Seeded)
 To test the role-based scopes, use these pre-seeded accounts:
-- **Admin**: `admin@studio.com` / `admin123`
-- **Production Manager**: `pm@studio.com` / `pm123`
-- **Client**: `client@studio.com` / `client123`
-- **Video Editor**: `editor@studio.com` / `editor123`
-- **VFX Artist**: `vfx@studio.com` / `vfx123`
+- **Admin**: `hemanandab8ags13010042@gmail.com` / `admin123`
+- **Production Manager**: `boreddymaheswarareddy999@gmail.com` / `pm123`
+- **Client**: `hemu29799@gmail.com` / `client123`
+- **Editor**: `hemu36586@gmail.com` / `editor123`
+- **VFX Artist**: `jaswanthben87@gmail.com` / `vfx123`
 
 ---
 

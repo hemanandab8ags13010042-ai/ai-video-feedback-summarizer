@@ -347,13 +347,13 @@ async function createTables() {
     const vfxPassword = await bcrypt.hash('vfx123', 10);
     const pmPassword = await bcrypt.hash('pm123', 10);
 
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Admin User', 'admin@studio.com', adminPassword, 'admin']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Client User', 'client@studio.com', clientPassword, 'client']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Editor User', 'editor@studio.com', editorPassword, 'editor']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['VFX Artist User', 'vfx@studio.com', vfxPassword, 'vfx_artist']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Production Manager User', 'pm@studio.com', pmPassword, 'pm']);
+    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Admin User', 'hemanandab8ags13010042@gmail.com', adminPassword, 'admin']);
+    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Client User', 'hemu29799@gmail.com', clientPassword, 'client']);
+    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Editor User', 'hemu36586@gmail.com', editorPassword, 'editor']);
+    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['VFX Artist User', 'jaswanthben87@gmail.com', vfxPassword, 'vfx_artist']);
+    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Production Manager User', 'boreddymaheswarareddy999@gmail.com', pmPassword, 'pm']);
 
-    console.log('👤 Standard developer accounts seeded (password: username123, e.g., admin@studio.com / admin123).');
+    console.log('👤 Standard developer accounts seeded (e.g., admin: hemanandab8ags13010042@gmail.com / admin123).');
   }
 }
 
