@@ -159,8 +159,8 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
   const recipients = await db.query(`
     SELECT id FROM users WHERE role IN ('pm', 'admin')
     UNION
-    SELECT id FROM users WHERE name = ? AND role = 'client'
-  `, [clientName]);
+    SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'
+  `, [clientName, clientName]);
 
   for (const r of recipients) {
     await sendNotification(
@@ -183,8 +183,8 @@ async function triggerNewCommentAlert(projectId, projectName, commenterName, com
     UNION
     SELECT DISTINCT assigned_to as id FROM tasks WHERE project_id = ? AND assigned_to IS NOT NULL
     UNION
-    SELECT id FROM users WHERE name = ? AND role = 'client'
-  `, [clientName]);
+    SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'
+  `, [clientName, clientName]);
 
   for (const r of recipients) {
     await sendNotification(
