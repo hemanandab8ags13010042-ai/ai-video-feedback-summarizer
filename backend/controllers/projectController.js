@@ -46,7 +46,7 @@ async function getProjects(req, res) {
     // Clients only see their own projects
     if (req.user.role === 'client') {
       // Find projects where the client_name matches the client's user name or email
-      projects = await db.query('SELECT * FROM projects WHERE client_name = ? OR client_name = ? ORDER BY deadline ASC', [req.user.name, req.user.email]);
+      projects = await db.query('SELECT * FROM projects WHERE LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?) ORDER BY deadline ASC', [req.user.name, req.user.email]);
     } else {
       // Studio staff see all projects
       projects = await db.query('SELECT * FROM projects ORDER BY deadline ASC');
@@ -73,7 +73,9 @@ async function getProjectById(req, res) {
     const project = projects[0];
 
     // Security check: Clients can only access their own project (matched by name or email)
-    if (req.user.role === 'client' && project.client_name !== req.user.name && project.client_name !== req.user.email) {
+    if (req.user.role === 'client' && 
+        project.client_name?.toLowerCase() !== req.user.name?.toLowerCase() && 
+        project.client_name?.toLowerCase() !== req.user.email?.toLowerCase()) {
       return res.status(403).json({ error: 'Access denied to this project.' });
     }
 

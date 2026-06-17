@@ -197,8 +197,8 @@ async function getFeedbackHistory(req, res) {
 
     // Filter feedback by client if applicable
     if (req.user.role === 'client') {
-      queryStr += ' WHERE p.client_name = ?';
-      params.push(req.user.name);
+      queryStr += ' WHERE (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
+      params.push(req.user.name, req.user.email);
     }
 
     queryStr += ' ORDER BY f.created_at DESC';

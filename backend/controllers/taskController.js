@@ -75,7 +75,7 @@ async function getTasks(req, res) {
 
     // Role-based scoping
     if (req.user.role === 'client') {
-      conditions.push('(p.client_name = ? OR p.client_name = ?)');
+      conditions.push('(LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))');
       params.push(req.user.name, req.user.email);
     } else if (req.user.role === 'editor' || req.user.role === 'vfx_artist') {
       // Editors & VFX Artists can see tasks assigned to them, or general tasks

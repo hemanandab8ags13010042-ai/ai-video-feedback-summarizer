@@ -156,7 +156,7 @@ async function triggerProjectCompletedAlert(projectId, projectName) {
   const recipients = await db.query(`
     SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
     UNION
-    SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'
+    SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'
   `, [clientName, clientName]);
 
   for (const r of recipients) {
@@ -178,7 +178,7 @@ async function triggerNewCommentAlert(projectId, projectName, commenterName, com
   const recipients = await db.query(`
     SELECT id FROM users WHERE role IN ('pm', 'admin', 'editor', 'vfx_artist')
     UNION
-    SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'
+    SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'
   `, [clientName, clientName]);
 
   for (const r of recipients) {

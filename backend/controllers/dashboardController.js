@@ -36,14 +36,14 @@ async function getDashboardData(req, res) {
     const projectParams = [];
 
     if (isClient) {
-      projectsCountQuery += ' WHERE client_name = ?';
-      reviewProjectsQuery += ' AND client_name = ?';
-      activeTasksQuery += ' AND p.client_name = ?';
-      completedTasksQuery += ' AND p.client_name = ?';
-      overdueProjectsQuery += ' AND client_name = ?';
+      projectsCountQuery += ' WHERE (LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?))';
+      reviewProjectsQuery += ' AND (LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?))';
+      activeTasksQuery += ' AND (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
+      completedTasksQuery += ' AND (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
+      overdueProjectsQuery += ' AND (LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?))';
 
-      params.push(clientName);
-      projectParams.push(clientName);
+      params.push(clientName, req.user.email);
+      projectParams.push(clientName, req.user.email);
     }
 
     const projectsCountRes = await db.query(projectsCountQuery, projectParams);
@@ -56,7 +56,7 @@ async function getDashboardData(req, res) {
     try {
       const overdueRes = await db.query(
         isClient 
-          ? "SELECT COUNT(*) as count FROM projects WHERE client_name = ? AND status != 'completed' AND deadline < CURRENT_DATE"
+          ? "SELECT COUNT(*) as count FROM projects WHERE (LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?)) AND status != 'completed' AND deadline < CURRENT_DATE"
           : "SELECT COUNT(*) as count FROM projects WHERE status != 'completed' AND deadline < CURRENT_DATE",
         projectParams
       );
@@ -65,7 +65,7 @@ async function getDashboardData(req, res) {
       // If CURRENT_DATE / DATE('now') failed on MySQL, query all and filter in JS
       const deadlines = await db.query(
         isClient 
-          ? "SELECT deadline FROM projects WHERE client_name = ? AND status != 'completed'"
+          ? "SELECT deadline FROM projects WHERE (LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?)) AND status != 'completed'"
           : "SELECT deadline FROM projects WHERE status != 'completed'",
         projectParams
       );
@@ -84,7 +84,7 @@ async function getDashboardData(req, res) {
     // --- 2. Chart Data: Feedback Sources ---
     let feedbackSourcesQuery = 'SELECT f.type, COUNT(*) as count FROM feedback f';
     if (isClient) {
-      feedbackSourcesQuery += ' INNER JOIN projects p ON f.project_id = p.id WHERE p.client_name = ?';
+      feedbackSourcesQuery += ' INNER JOIN projects p ON f.project_id = p.id WHERE (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
     }
     feedbackSourcesQuery += ' GROUP BY f.type';
     const feedbackSources = await db.query(feedbackSourcesQuery, projectParams);
@@ -98,7 +98,7 @@ async function getDashboardData(req, res) {
       WHERE t.status = 'completed'
     `;
     if (isClient) {
-      productivityQuery += ' AND p.client_name = ?';
+      productivityQuery += ' AND (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
     }
     productivityQuery += ' GROUP BY u.name';
     const productivity = await db.query(productivityQuery, projectParams);
@@ -110,7 +110,7 @@ async function getDashboardData(req, res) {
       INNER JOIN projects p ON t.project_id = p.id
     `;
     if (isClient) {
-      categoryQuery += ' WHERE p.client_name = ?';
+      categoryQuery += ' WHERE (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
     }
     categoryQuery += ' GROUP BY t.category';
     const categoryBreakdown = await db.query(categoryQuery, projectParams);
@@ -123,7 +123,7 @@ async function getDashboardData(req, res) {
       INNER JOIN projects p ON l.project_id = p.id
     `;
     if (isClient) {
-      activityQuery += ' WHERE p.client_name = ?';
+      activityQuery += ' WHERE (LOWER(p.client_name) = LOWER(?) OR LOWER(p.client_name) = LOWER(?))';
     }
     activityQuery += ' ORDER BY l.created_at DESC LIMIT 10';
     const activityFeed = await db.query(activityQuery, projectParams);
@@ -146,7 +146,7 @@ async function getDashboardData(req, res) {
     // --- 8. Client Sentiment & Project Health Radar ---
     let projectsQuery = 'SELECT id, name, client_name, deadline, status FROM projects';
     if (isClient) {
-      projectsQuery += ' WHERE client_name = ?';
+      projectsQuery += ' WHERE (LOWER(client_name) = LOWER(?) OR LOWER(client_name) = LOWER(?))';
     }
     const projects = await db.query(projectsQuery, projectParams);
 
