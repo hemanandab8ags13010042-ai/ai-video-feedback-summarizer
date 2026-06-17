@@ -52,8 +52,8 @@ async function uploadVideo(req, res) {
     );
 
     // 6. Trigger Client Notification (Email & WhatsApp simulation)
-    // Find client ID or name matching the project's client_name
-    const clients = await db.query("SELECT id, email FROM users WHERE name = ? AND role = 'client'", [project.client_name]);
+    // Find client ID or name matching the project's client_name (by name or email)
+    const clients = await db.query("SELECT id, email FROM users WHERE (name = ? OR email = ?) AND role = 'client'", [project.client_name, project.client_name]);
     
     if (clients.length > 0) {
       const client = clients[0];
@@ -130,7 +130,7 @@ async function uploadNewVersion(req, res) {
     );
 
     // 5. Notify Client
-    const clients = await db.query("SELECT id FROM users WHERE name = ? AND role = 'client'", [project.client_name]);
+    const clients = await db.query("SELECT id FROM users WHERE (name = ? OR email = ?) AND role = 'client'", [project.client_name, project.client_name]);
     if (clients.length > 0) {
       const client = clients[0];
       await notificationService.sendNotification(
