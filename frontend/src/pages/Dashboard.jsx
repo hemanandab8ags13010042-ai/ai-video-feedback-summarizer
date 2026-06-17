@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { dashboardService, projectService } from '../services/api';
+import { dashboardService, projectService, authService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { 
@@ -66,6 +66,8 @@ export default function Dashboard() {
   const [priority, setPriority] = useState('medium');
   const [status, setStatus] = useState('draft');
   const [formError, setFormError] = useState('');
+  const [usersList, setUsersList] = useState([]);
+  const [isCustomClient, setIsCustomClient] = useState(false);
 
   const loadDashboardData = async () => {
     try {
@@ -83,6 +85,16 @@ export default function Dashboard() {
 
       const projectList = await projectService.getAll();
       setProjects(projectList);
+
+      // Fetch registered users list to select client
+      if (user && (user.role === 'admin' || user.role === 'pm')) {
+        try {
+          const allUsers = await authService.getUsers();
+          setUsersList(allUsers);
+        } catch (uErr) {
+          console.error('Failed to load registered users:', uErr);
+        }
+      }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     }
@@ -133,6 +145,7 @@ export default function Dashboard() {
       setProjName('');
       setClientName('');
       setDeadline('');
+      setIsCustomClient(false);
       setIsModalOpen(false);
       await loadDashboardData();
     } catch (err) {
@@ -228,7 +241,13 @@ export default function Dashboard() {
 
             {['pm', 'admin'].includes(user?.role) && (
               <button
-                onClick={() => setIsModalOpen(true)}
+                onClick={() => {
+                  setIsCustomClient(false);
+                  setProjName('');
+                  setClientName('');
+                  setDeadline('');
+                  setIsModalOpen(true);
+                }}
                 className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-lg shadow-violet-500/10 transition-all"
               >
                 <Plus className="w-4 h-4" />
@@ -648,17 +667,58 @@ export default function Dashboard() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-400 block mb-1">Client Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="E.g. Client User (must match client login name)"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  className={`w-full px-3 py-2 rounded border text-sm focus:outline-none focus:ring-1 ${
-                    isDark ? 'bg-[#0B0F19] border-slate-800 focus:border-violet-500 focus:ring-violet-500' : 'bg-slate-50 border-slate-200 focus:border-violet-500 focus:ring-violet-500'
-                  }`}
-                />
+                <label className="text-xs font-semibold text-slate-400 block mb-1">Client *</label>
+                {!isCustomClient ? (
+                  <div className="flex gap-2">
+                    <select
+                      value={clientName}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          setIsCustomClient(true);
+                          setClientName('');
+                        } else {
+                          setClientName(e.target.value);
+                        }
+                      }}
+                      className={`w-full px-3 py-2 rounded border text-sm focus:outline-none focus:ring-1 transition-colors ${
+                        isDark ? 'bg-[#0B0F19] border-slate-800 text-slate-100 focus:border-violet-500 focus:ring-violet-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-violet-500 focus:ring-violet-500'
+                      }`}
+                    >
+                      <option value="">-- Select Registered Client --</option>
+                      {usersList
+                        .filter((u) => u.role === 'client')
+                        .map((u) => (
+                          <option key={u.id} value={u.name}>
+                            {u.name} ({u.email})
+                          </option>
+                        ))}
+                      <option value="__custom__">+ Enter Custom Email/Name (Unregistered)...</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="E.g. newclient@gmail.com"
+                      value={clientName}
+                      onChange={(e) => setClientName(e.target.value)}
+                      className={`flex-1 px-3 py-2 rounded border text-sm focus:outline-none focus:ring-1 ${
+                        isDark ? 'bg-[#0B0F19] border-slate-800 text-slate-100 focus:border-violet-500 focus:ring-violet-500' : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-violet-500 focus:ring-violet-500'
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomClient(false);
+                        setClientName('');
+                      }}
+                      className="px-2.5 py-2 rounded border text-xs bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20 transition-colors animate-fade-in"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
