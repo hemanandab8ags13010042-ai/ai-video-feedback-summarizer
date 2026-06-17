@@ -39,8 +39,8 @@ async function register(req, res) {
       user: { id: userId, name, email, role: validRole }
     });
   } catch (err) {
-    console.error('Registration Error:', err.message);
-    res.status(500).json({ error: 'Failed to register user.' });
+    console.error('Registration Error:', err);
+    res.status(500).json({ error: `Failed to register user: ${err.message}` });
   }
 }
 
@@ -87,8 +87,8 @@ async function login(req, res) {
       }
     });
   } catch (err) {
-    console.error('Login Error:', err.message);
-    res.status(500).json({ error: 'Internal server login error.' });
+    console.error('Login Error:', err);
+    res.status(500).json({ error: `Internal server login error: ${err.message}` });
   }
 }
 
