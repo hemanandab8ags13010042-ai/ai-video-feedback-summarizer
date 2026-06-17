@@ -50,6 +50,50 @@ io.on('connection', (socket) => {
     socket.to(`review-session-${versionId}`).emit('draw-stroke-update', data);
   });
 
+  // WebRTC Live Voice Review signaling events
+  socket.on('webrtc-join', (data) => {
+    const { versionId, userName } = data;
+    socket.join(`voice-room-${versionId}`);
+    socket.to(`voice-room-${versionId}`).emit('webrtc-user-joined', {
+      socketId: socket.id,
+      userName
+    });
+    console.log(`🎙️ WebRTC user "${userName}" joined voice room: voice-room-${versionId}`);
+  });
+
+  socket.on('webrtc-offer', (data) => {
+    const { targetSocketId, offer } = data;
+    socket.to(targetSocketId).emit('webrtc-offer-received', {
+      senderSocketId: socket.id,
+      offer
+    });
+  });
+
+  socket.on('webrtc-answer', (data) => {
+    const { targetSocketId, answer } = data;
+    socket.to(targetSocketId).emit('webrtc-answer-received', {
+      senderSocketId: socket.id,
+      answer
+    });
+  });
+
+  socket.on('webrtc-candidate', (data) => {
+    const { targetSocketId, candidate } = data;
+    socket.to(targetSocketId).emit('webrtc-candidate-received', {
+      senderSocketId: socket.id,
+      candidate
+    });
+  });
+
+  socket.on('webrtc-leave', (data) => {
+    const { versionId } = data;
+    socket.leave(`voice-room-${versionId}`);
+    socket.to(`voice-room-${versionId}`).emit('webrtc-user-left', {
+      socketId: socket.id
+    });
+    console.log(`🎙️ WebRTC user left voice room: voice-room-${versionId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log(`🔌 Socket client disconnected: ${socket.id}`);
   });

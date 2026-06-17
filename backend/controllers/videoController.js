@@ -462,6 +462,37 @@ async function exportSubtitles(req, res) {
   }
 }
 
+async function searchVideoContent(req, res) {
+  const versionId = req.params.version_id;
+  const query = req.query.q;
+
+  if (!query) {
+    return res.status(400).json({ error: 'Search query parameter "q" is required.' });
+  }
+
+  try {
+    // 1. Fetch subtitles
+    const subtitles = await db.query(
+      'SELECT start_time, end_time, text FROM video_subtitles WHERE version_id = ? ORDER BY start_time ASC',
+      [versionId]
+    );
+
+    // 2. Fetch feedback comments
+    const comments = await db.query(
+      'SELECT timestamp_seconds, comment FROM feedback_comments WHERE version_id = ?',
+      [versionId]
+    );
+
+    // 3. Perform AI/Fallback search
+    const result = await aiService.searchVideoTime(query, subtitles, comments);
+
+    res.json(result);
+  } catch (err) {
+    console.error('Search Video Content Error:', err.message);
+    res.status(500).json({ error: 'Failed to search video content.' });
+  }
+}
+
 module.exports = {
   uploadVideo,
   uploadNewVersion,
@@ -471,5 +502,6 @@ module.exports = {
   generateSubtitles,
   getSubtitles,
   updateSubtitle,
-  exportSubtitles
+  exportSubtitles,
+  searchVideoContent
 };

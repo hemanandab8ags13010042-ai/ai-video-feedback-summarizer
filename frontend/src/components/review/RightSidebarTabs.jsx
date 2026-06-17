@@ -4,6 +4,7 @@ import { videoService } from '../../services/api';
 import { 
   Play, Sparkles, Send, Download, FileText, Edit2, Volume2 
 } from 'lucide-react';
+import AudioWaveform from './AudioWaveform';
 
 export default function RightSidebarTabs({ videoRef, user, isDark, BASE_URL }) {
   const store = useReviewStore();
@@ -255,11 +256,9 @@ export default function RightSidebarTabs({ videoRef, user, isDark, BASE_URL }) {
                   {/* voice notes player details */}
                   {c.voice_audio_url && (
                     <div className="mt-2.5 p-2 rounded bg-slate-500/5 flex flex-col gap-1 text-[10px]">
-                      <audio 
-                        controls 
-                        onClick={(e) => e.stopPropagation()}
-                        src={c.voice_audio_url.startsWith('http') ? c.voice_audio_url : `${BASE_URL}${c.voice_audio_url}`} 
-                        className="w-full h-6 accent-cyan-400 rounded"
+                      <AudioWaveform 
+                        audioUrl={c.voice_audio_url.startsWith('http') ? c.voice_audio_url : `${BASE_URL}${c.voice_audio_url}`}
+                        isDark={isDark}
                       />
                       <span 
                         onClick={(e) => {

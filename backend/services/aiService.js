@@ -709,11 +709,188 @@ Return ONLY a valid JSON array. Do not wrap in markdown.`
   return generateMockSubtitles();
 }
 
+/**
+ * Semantically search the video content for a query using subtitles and comments
+ */
+async function searchVideoTime(query, subtitles = [], comments = []) {
+  if (!query) {
+    return { timestamp: null, reason: 'No query provided.' };
+  }
+
+  const systemPrompt = `You are an expert AI video content search engine.
+Given:
+1. A search query from the user.
+2. A list of subtitle segments (with start_time, end_time, text).
+3. A list of feedback comments (with timestamp_seconds, comment).
+
+Identify the single most relevant timestamp (in seconds) in the video that matches the query.
+Examples:
+- If the user searches for "red car", and a subtitle says "look at that red sports car" at 15.4 seconds, or a comment mentions "the red car is visible at 15", return 15.4.
+- If the user searches for a concept or a discussion (e.g., "branding"), match it to when branding is discussed or comments mention branding.
+
+Return ONLY a valid JSON object matching the schema below. Do not wrap in markdown or code blocks.
+JSON Schema:
+{
+  "timestamp": 12.34, // or null if no match is found. Must be a number (float or integer) representing seconds.
+  "reason": "Short explanation of why this timestamp matches the query."
+}
+
+Search Query: "${query.replace(/"/g, '\\"')}"
+
+Subtitle Segments:
+${JSON.stringify(subtitles)}
+
+Feedback Comments:
+${JSON.stringify(comments.map(c => ({ timestamp_seconds: c.timestamp_seconds, comment: c.comment })))}
+`;
+
+  // 1. Try Gemini
+  if (geminiClient) {
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    for (const modelName of models) {
+      try {
+        const model = geminiClient.getGenerativeModel({ model: modelName });
+        const response = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: systemPrompt }] }]
+        });
+        const resText = response.response.text();
+        const parsed = parseAIJson(resText);
+        if (parsed && (typeof parsed.timestamp === 'number' || parsed.timestamp === null)) {
+          console.log(`✅ Semantic search completed via Gemini (${modelName}):`, parsed);
+          return {
+            timestamp: parsed.timestamp,
+            reason: parsed.reason || 'Matched using Gemini AI analysis.'
+          };
+        }
+      } catch (err) {
+        console.warn(`Gemini semantic search (${modelName}) failed: ${err.message}. Trying next fallback...`);
+      }
+    }
+  }
+
+  // 2. Try OpenAI
+  if (openaiClient) {
+    try {
+      const response = await openaiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [{ role: 'user', content: systemPrompt }],
+        response_format: { type: 'json_object' }
+      });
+      const parsed = JSON.parse(response.choices[0].message.content);
+      if (parsed && (typeof parsed.timestamp === 'number' || parsed.timestamp === null)) {
+        console.log('✅ Semantic search completed via OpenAI:', parsed);
+        return {
+          timestamp: parsed.timestamp,
+          reason: parsed.reason || 'Matched using OpenAI.'
+        };
+      }
+    } catch (err) {
+      console.warn('OpenAI semantic search failed, trying fallback:', err.message);
+    }
+  }
+
+  // 3. Try Groq
+  if (groqClient) {
+    try {
+      const response = await groqClient.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        messages: [{ role: 'user', content: systemPrompt }],
+        response_format: { type: 'json_object' }
+      });
+      const parsed = JSON.parse(response.choices[0].message.content);
+      if (parsed && (typeof parsed.timestamp === 'number' || parsed.timestamp === null)) {
+        console.log('✅ Semantic search completed via Groq:', parsed);
+        return {
+          timestamp: parsed.timestamp,
+          reason: parsed.reason || 'Matched using Groq.'
+        };
+      }
+    } catch (err) {
+      console.warn('Groq semantic search failed, trying keyword fallback:', err.message);
+    }
+  }
+
+  // 4. Local Keyword-based Fallback
+  console.log('ℹ️ Running local keyword search fallback for:', query);
+  const cleanQuery = query.toLowerCase().trim();
+  const queryWords = cleanQuery.split(/\s+/).filter(w => w.length > 2);
+
+  let bestMatch = null;
+  let highestScore = 0;
+
+  // Search Comments
+  for (const comment of comments) {
+    const text = (comment.comment || '').toLowerCase();
+    if (text.includes(cleanQuery)) {
+      const score = 100; // Exact phrase match in comments is very strong
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = {
+          timestamp: comment.timestamp_seconds || 0,
+          reason: `Found exact match in feedback comments: "${comment.comment}"`
+        };
+      }
+    } else {
+      let wordMatches = 0;
+      for (const word of queryWords) {
+        if (text.includes(word)) wordMatches++;
+      }
+      if (wordMatches > 0 && queryWords.length > 0) {
+        const score = (wordMatches / queryWords.length) * 50;
+        if (score > highestScore) {
+          highestScore = score;
+          bestMatch = {
+            timestamp: comment.timestamp_seconds || 0,
+            reason: `Found partial word match in comments: "${comment.comment}"`
+          };
+        }
+      }
+    }
+  }
+
+  // Search Subtitles
+  for (const sub of subtitles) {
+    const text = (sub.text || '').toLowerCase();
+    if (text.includes(cleanQuery)) {
+      const score = 90; // Exact phrase match in subtitles
+      if (score > highestScore) {
+        highestScore = score;
+        bestMatch = {
+          timestamp: sub.start_time,
+          reason: `Found exact match in subtitles: "${sub.text}"`
+        };
+      }
+    } else {
+      let wordMatches = 0;
+      for (const word of queryWords) {
+        if (text.includes(word)) wordMatches++;
+      }
+      if (wordMatches > 0 && queryWords.length > 0) {
+        const score = (wordMatches / queryWords.length) * 40;
+        if (score > highestScore) {
+          highestScore = score;
+          bestMatch = {
+            timestamp: sub.start_time,
+            reason: `Found partial word match in subtitles: "${sub.text}"`
+          };
+        }
+      }
+    }
+  }
+
+  if (bestMatch) {
+    return bestMatch;
+  }
+
+  return { timestamp: null, reason: 'No matching scene, comment, or subtitle dialogue found.' };
+}
+
 module.exports = {
   analyzeFeedback,
   chatbotChat,
   transcribeAudio,
   analyzeVideoCommentsAI,
-  generateSubtitlesAI
+  generateSubtitlesAI,
+  searchVideoTime
 };
 

@@ -6,7 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useReviewStore } from '../store/useReviewStore';
 import io from 'socket.io-client';
 import { 
-  ArrowLeft, ChevronDown, Award, CheckCircle, AlertCircle, Sparkles, RefreshCw
+  ArrowLeft, ChevronDown, Award, CheckCircle, AlertCircle, Sparkles, RefreshCw, Mic
 } from 'lucide-react';
 
 // Modular Subcomponents
@@ -21,6 +21,12 @@ export default function VideoReview() {
   const { user } = useAuth();
   const { isDark } = useTheme();
   const store = useReviewStore();
+
+  // WebRTC Local voice chat states & refs
+  const [isVoiceActive, setIsVoiceActive] = React.useState(false);
+  const [voiceMembers, setVoiceMembers] = React.useState([]);
+  const localStreamRef = useRef(null);
+  const peerConnectionsRef = useRef({});
 
   // DOM Refs
   const videoRef = useRef(null);
@@ -116,6 +122,82 @@ export default function VideoReview() {
       }
     });
 
+    // WebRTC Signaling events
+    socket.on('webrtc-user-joined', async (data) => {
+      const { socketId, userName } = data;
+      setVoiceMembers(prev => [...prev, { id: socketId, userName }]);
+      const pc = createPeerConnection(socketId, userName);
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current);
+        });
+      }
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('webrtc-offer', { targetSocketId: socketId, offer });
+      } catch (err) {
+        console.error('Failed to create WebRTC offer:', err);
+      }
+    });
+
+    socket.on('webrtc-offer-received', async (data) => {
+      const { senderSocketId, offer } = data;
+      const userName = 'Reviewer';
+      setVoiceMembers(prev => {
+        if (prev.some(p => p.id === senderSocketId)) return prev;
+        return [...prev, { id: senderSocketId, userName }];
+      });
+      const pc = createPeerConnection(senderSocketId, userName);
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => {
+          pc.addTrack(track, localStreamRef.current);
+        });
+      }
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc-answer', { targetSocketId: senderSocketId, answer });
+      } catch (err) {
+        console.error('Failed to create WebRTC answer:', err);
+      }
+    });
+
+    socket.on('webrtc-answer-received', async (data) => {
+      const { senderSocketId, answer } = data;
+      const pc = peerConnectionsRef.current[senderSocketId];
+      if (pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    socket.on('webrtc-candidate-received', async (data) => {
+      const { senderSocketId, candidate } = data;
+      const pc = peerConnectionsRef.current[senderSocketId];
+      if (pc && candidate) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error('Failed to add WebRTC candidate:', err);
+        }
+      }
+    });
+
+    socket.on('webrtc-user-left', (data) => {
+      const { socketId } = data;
+      setVoiceMembers(prev => prev.filter(p => p.id !== socketId));
+      const pc = peerConnectionsRef.current[socketId];
+      if (pc) {
+        pc.close();
+        delete peerConnectionsRef.current[socketId];
+      }
+      const audio = document.getElementById(`audio-${socketId}`);
+      if (audio) {
+        audio.remove();
+      }
+    });
+
     return () => {
       socket.disconnect();
     };
@@ -135,6 +217,89 @@ export default function VideoReview() {
       store.setCollaborators(cleaned);
     }, 1000);
     return () => clearInterval(interval);
+  }, []);
+
+  // WebRTC Audio Call Helpers
+  const createPeerConnection = (socketId, userName) => {
+    if (peerConnectionsRef.current[socketId]) {
+      peerConnectionsRef.current[socketId].close();
+    }
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+    peerConnectionsRef.current[socketId] = pc;
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socketRef.current) {
+        socketRef.current.emit('webrtc-candidate', {
+          targetSocketId: socketId,
+          candidate: event.candidate
+        });
+      }
+    };
+    pc.ontrack = (event) => {
+      const remoteStream = event.streams[0];
+      let audio = document.getElementById(`audio-${socketId}`);
+      if (!audio) {
+        audio = document.createElement('audio');
+        audio.id = `audio-${socketId}`;
+        audio.className = 'remote-audio';
+        audio.autoplay = true;
+        audio.style.display = 'none';
+        document.body.appendChild(audio);
+      }
+      audio.srcObject = remoteStream;
+    };
+    return pc;
+  };
+
+  const toggleVoiceChat = async () => {
+    if (isVoiceActive) {
+      setIsVoiceActive(false);
+      setVoiceMembers([]);
+      if (socketRef.current) {
+        socketRef.current.emit('webrtc-leave', { versionId });
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current = null;
+      }
+      Object.keys(peerConnectionsRef.current).forEach(socketId => {
+        peerConnectionsRef.current[socketId].close();
+      });
+      peerConnectionsRef.current = {};
+      const audios = document.querySelectorAll('.remote-audio');
+      audios.forEach(el => el.remove());
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        localStreamRef.current = stream;
+        setIsVoiceActive(true);
+        setVoiceMembers([{ id: 'local', userName: user.name }]);
+        if (socketRef.current) {
+          socketRef.current.emit('webrtc-join', { versionId, userName: user.name });
+        }
+      } catch (err) {
+        alert('Could not access microphone for live review session.');
+        console.error(err);
+      }
+    }
+  };
+
+  // Clean WebRTC connections on unmount
+  useEffect(() => {
+    return () => {
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      Object.keys(peerConnectionsRef.current).forEach(socketId => {
+        peerConnectionsRef.current[socketId].close();
+      });
+      const audios = document.querySelectorAll('.remote-audio');
+      audios.forEach(el => el.remove());
+    };
   }, []);
 
   const clearCanvas = () => {
@@ -205,6 +370,29 @@ export default function VideoReview() {
           </div>
 
           <div className="flex items-center gap-3">
+            {isVoiceActive && (
+              <div className="flex items-center gap-1.5 border-r border-slate-850/30 pr-3 mr-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                <span className="text-[10px] font-bold text-slate-400">
+                  Voice Room ({voiceMembers.length}): {voiceMembers.map(m => m.userName).join(', ')}
+                </span>
+              </div>
+            )}
+
+            <button
+              onClick={toggleVoiceChat}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-md ${
+                isVoiceActive 
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white animate-pulse shadow-rose-500/10' 
+                  : isDark 
+                    ? 'bg-[#0B0F19] border-slate-800 text-slate-350 hover:text-white' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Mic className="w-4 h-4" />
+              {isVoiceActive ? 'Leave Voice Review' : 'Start Voice Review'}
+            </button>
+
             <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
               store.version?.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400' :
               store.version?.status === 'revision_required' ? 'bg-rose-500/10 text-rose-400' : 'bg-yellow-500/10 text-yellow-500'

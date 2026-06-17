@@ -191,6 +191,10 @@ export const videoService = {
   downloadSubtitles: async (versionId, format = 'srt') => {
     const token = localStorage.getItem('token');
     return `${API_URL}/videos/version/${versionId}/export-subtitles?format=${format}&token=${token}`;
+  },
+  search: async (versionId, query) => {
+    const res = await api.get(`/videos/version/${versionId}/search`, { params: { q: query } });
+    return res.data;
   }
 };
 

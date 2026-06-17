@@ -26,8 +26,9 @@ async function sendNotification(userId, title, message, type = 'in_app') {
     console.log(`   Title:   ${title}`);
     console.log(`   Message: ${message}`);
     
-    // Simulate Email Delivery
-    console.log(`   ✉️ [Email Delivery] Sent message to ${emailStr}`);
+    // Dispatch actual email
+    const emailService = require('./emailService');
+    await emailService.sendNotificationEmail(emailStr, title, message);
     
     // Simulate WhatsApp Delivery
     console.log(`   📱 [WhatsApp API Integration] Alerts dispatched to registered number for ${nameStr}`);

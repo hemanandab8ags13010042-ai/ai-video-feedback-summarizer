@@ -1,8 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useReviewStore } from '../../store/useReviewStore';
 import { 
-  Play, Pause, Volume2, Maximize, Clock 
+  Play, Pause, Volume2, Maximize, Clock, Search, Sparkles, Loader2 
 } from 'lucide-react';
+import { videoService } from '../../services/api';
 
 export default function VideoPlayerSection({
   versionId,
@@ -18,6 +19,41 @@ export default function VideoPlayerSection({
   const isDrawing = useRef(false);
   const startX = useRef(0);
   const startY = useRef(0);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchReason, setSearchReason] = useState('');
+
+  const handleSearch = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim() || !versionId) return;
+
+    setIsSearching(true);
+    setSearchError('');
+    setSearchReason('');
+
+    try {
+      const result = await videoService.search(versionId, searchQuery);
+      if (result.timestamp !== null && result.timestamp !== undefined) {
+        if (videoRef.current) {
+          videoRef.current.currentTime = result.timestamp;
+          store.setCurrentTime(result.timestamp);
+          if (store.isComparing && compareVideoRef.current) {
+            compareVideoRef.current.currentTime = result.timestamp;
+          }
+        }
+        setSearchReason(result.reason || 'Found matching scene.');
+      } else {
+        setSearchError(result.reason || 'No matching scene found.');
+      }
+    } catch (err) {
+      console.error('Semantic search error:', err);
+      setSearchError('Failed to search video. Make sure subtitles/comments exist.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   // Playback sync when comparing cuts
   useEffect(() => {
@@ -555,6 +591,58 @@ export default function VideoPlayerSection({
 
       {/* Control overlay elements & seekbar */}
       <div className="px-4 pt-4 pb-2 bg-slate-950 flex flex-col gap-1.5 relative">
+        
+        {/* Semantic AI Search Input */}
+        <form onSubmit={handleSearch} className="mb-2 relative flex items-center gap-2 z-35">
+          <div className="relative flex-1">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              {isSearching ? (
+                <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+              ) : (
+                <Sparkles className="w-4 h-4 text-violet-400" />
+              )}
+            </span>
+            <input
+              type="text"
+              placeholder="Ask AI to find a scene (e.g. 'the part with red lights', 'intro dialogue')..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900/80 border border-slate-800 focus:border-violet-500 rounded-lg pl-9 pr-24 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-violet-500 transition"
+            />
+            <div className="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setSearchReason(''); setSearchError(''); }}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 px-1"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={isSearching}
+                className="bg-violet-600/90 hover:bg-violet-600 text-white font-medium rounded px-2 py-0.5 text-[10px] transition disabled:opacity-50"
+              >
+                Search
+              </button>
+            </div>
+          </div>
+          {searchReason && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900/95 border border-slate-800 rounded px-3 py-1.5 text-[11px] text-emerald-450 z-50 shadow-lg flex items-center gap-2">
+              <span className="font-bold">AI Seek:</span>
+              <span className="text-slate-300 flex-1 truncate">{searchReason}</span>
+              <button type="button" onClick={() => setSearchReason('')} className="text-slate-550 hover:text-slate-300 font-bold ml-1">×</button>
+            </div>
+          )}
+          {searchError && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900/95 border border-red-900/55 rounded px-3 py-1.5 text-[11px] text-red-400 z-50 shadow-lg flex items-center gap-2">
+              <span className="font-bold">AI Seek:</span>
+              <span className="text-slate-300 flex-1 truncate">{searchError}</span>
+              <button type="button" onClick={() => setSearchError('')} className="text-slate-550 hover:text-slate-300 font-bold ml-1">×</button>
+            </div>
+          )}
+        </form>
         
         {/* Comment indicators ticks along seekbar */}
         <div className="absolute top-3.5 left-4 right-4 h-2 pointer-events-none z-10">
