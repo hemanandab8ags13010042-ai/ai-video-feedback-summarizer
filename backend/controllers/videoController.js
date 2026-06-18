@@ -43,7 +43,7 @@ async function uploadVideo(req, res) {
     const versionId = versionResult.insertId;
 
     // 5. Generate secure review link (mapped to frontend route)
-    const frontendHost = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendHost = process.env.FRONTEND_URL || 'https://ai-video-feedback-summarizer.vercel.app';
     const reviewLink = `${frontendHost}/review/${versionId}`;
     
     await db.query(
@@ -52,24 +52,37 @@ async function uploadVideo(req, res) {
     );
 
     // 6. Trigger Client Notification (Email & WhatsApp simulation)
-    // Find client ID or name matching the project's client_name (by name or email)
     const clients = await db.query("SELECT id, email FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'", [project.client_name, project.client_name]);
-    
-    const alertMsg = `Your video "${title}" (${verNumber}) is ready for review. Click here to watch and provide timestamp feedback: ${reviewLink}`;
+
+    const alertBody =
+      `A new video cut is ready and awaiting your review on **"${project.name || 'your project'}"**. Our production team has completed this revision phase and requires your timestamped feedback before we can proceed.\n\n` +
+      `**Video:** ${title}\n` +
+      `**Version:** ${verNumber}\n\n` +
+      `Click the button below to open the secure review session. You can add timestamped comments, draw annotations directly on frames, and record voice notes.`;
+
     if (clients.length > 0) {
       const client = clients[0];
       await notificationService.sendNotification(
         client.id,
-        `🎬 Video Ready for Review: ${title} (${verNumber})`,
-        alertMsg,
-        'email'
+        `🎬 Video Ready for Review — ${title} (${verNumber})`,
+        alertBody,
+        'email',
+        [],
+        reviewLink,
+        '▶ Open Review Session',
+        'REVIEW REQUESTED',
+        '#7c3aed'
       );
     } else if (project.client_name && project.client_name.includes('@')) {
       const emailService = require('../services/emailService');
       await emailService.sendNotificationEmail(
         project.client_name.trim(),
-        `🎬 Video Ready for Review: ${title} (${verNumber})`,
-        alertMsg
+        `🎬 Video Ready for Review — ${title} (${verNumber})`,
+        alertBody,
+        reviewLink,
+        '▶ Open Review Session',
+        'REVIEW REQUESTED',
+        '#7c3aed'
       );
     }
 
@@ -128,7 +141,7 @@ async function uploadNewVersion(req, res) {
     const versionId = versionResult.insertId;
 
     // 4. Generate review link
-    const frontendHost = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendHost = process.env.FRONTEND_URL || 'https://ai-video-feedback-summarizer.vercel.app';
     const reviewLink = `${frontendHost}/review/${versionId}`;
     
     await db.query(
@@ -138,21 +151,36 @@ async function uploadNewVersion(req, res) {
 
     // 5. Notify Client
     const clients = await db.query("SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'", [project.client_name, project.client_name]);
-    const revisionMsg = `A new version (${version_number}) is ready for review. Click here to watch: ${reviewLink}`;
+
+    const revisionBody =
+      `Our team has uploaded a new revised version of **"${video.title}"** based on your previous feedback. Please review the latest cut and let us know if additional changes are needed.\n\n` +
+      `**Video:** ${video.title}\n` +
+      `**New Version:** ${version_number}\n\n` +
+      `Open the review session below to watch the updated cut, add timestamped notes, and submit your approval or revision request.`;
+
     if (clients.length > 0) {
       const client = clients[0];
       await notificationService.sendNotification(
         client.id,
-        `🔄 New Revision Uploaded: ${video.title} (${version_number})`,
-        revisionMsg,
-        'whatsapp'
+        `🔄 New Revision Ready — ${video.title} (${version_number})`,
+        revisionBody,
+        'email',
+        [],
+        reviewLink,
+        '▶ Review New Version',
+        'NEW REVISION',
+        '#06b6d4'
       );
     } else if (project.client_name && project.client_name.includes('@')) {
       const emailService = require('../services/emailService');
       await emailService.sendNotificationEmail(
         project.client_name.trim(),
-        `🔄 New Revision Uploaded: ${video.title} (${version_number})`,
-        revisionMsg
+        `🔄 New Revision Ready — ${video.title} (${version_number})`,
+        revisionBody,
+        reviewLink,
+        '▶ Review New Version',
+        'NEW REVISION',
+        '#06b6d4'
       );
     }
 

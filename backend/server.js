@@ -99,7 +99,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// Middleware
+// Middleware for Express app
 app.use(cors({
   origin: true, // Dynamically reflect origin to support credentials
   credentials: true

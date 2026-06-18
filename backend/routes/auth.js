@@ -9,6 +9,8 @@ const { validateRegister, validateLogin } = require('../middleware/inputValidato
 // Auth limiter: 10 attempts per 15 minutes per IP
 router.post('/register', authLimiter, validateRegister, authController.register);
 router.post('/login', authLimiter, validateLogin, authController.login);
+router.post('/verify-otp', authLimiter, authController.verifyOTP);
+router.post('/resend-otp', authLimiter, authController.resendOTP);
 
 // Protected routes
 router.get('/me', authenticateToken, authController.getMe);

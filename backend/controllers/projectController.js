@@ -28,20 +28,39 @@ async function createProject(req, res) {
         "SELECT id FROM users WHERE (LOWER(name) = LOWER(?) OR LOWER(email) = LOWER(?)) AND role = 'client'",
         [client_name, client_name]
       );
+
+      const projectBody =
+        `A new video production project has been set up for you on DigiQuest Studio.\n\n` +
+        `**Project Name:** ${name}\n` +
+        `**Video Type:** ${video_type || 'To be confirmed'}\n` +
+        `**Deadline:** ${deadline}\n\n` +
+        `Our production team is preparing your project pipeline. You will receive email notifications at each key milestone — including when your video cut is ready for review, when revisions are completed, and when the project is signed off.\n\n` +
+        `Log in to your dashboard to monitor progress and access the review session when it becomes available.`;
+
       if (clients.length > 0) {
         const client = clients[0];
         await notificationService.sendNotification(
           client.id,
-          `📁 New Project Setup: ${name}`,
-          `A new video feedback project "${name}" has been created for you. You can now log in to access the reviews pipeline.`,
-          'email'
+          `📁 New Project Created — ${name}`,
+          projectBody,
+          'email',
+          [],
+          `${process.env.FRONTEND_URL || 'https://ai-video-feedback-summarizer.vercel.app'}/projects`,
+          '📁 View Your Projects',
+          'PROJECT CREATED',
+          '#7c3aed'
         );
       } else if (client_name && client_name.includes('@')) {
         const emailService = require('../services/emailService');
         await emailService.sendNotificationEmail(
           client_name.trim(),
-          `📁 New Project Setup: ${name}`,
-          `A new video feedback project "${name}" has been created for you on DigiQuest Studio. Once you register using this email, you will be able to review video cuts, track tasks, and submit revisions.`
+          `📁 New Project Created — ${name}`,
+          projectBody +
+          `\n\nRegister on DigiQuest Studio using this email address to access your project dashboard and participate in the review pipeline.`,
+          `${process.env.FRONTEND_URL || 'https://ai-video-feedback-summarizer.vercel.app'}`,
+          '🎬 Visit DigiQuest Studio',
+          'PROJECT CREATED',
+          '#7c3aed'
         );
       }
     } catch (notifErr) {

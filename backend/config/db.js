@@ -115,9 +115,33 @@ async function createTables() {
       email VARCHAR(255) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
       role VARCHAR(50) DEFAULT 'client',
+      is_verified TINYINT DEFAULT 0,
+      verification_code VARCHAR(50) NULL,
       created_at ${datetimeDefault}
     )
   `);
+
+  // Migration for existing databases: Add column is_verified and verification_code if missing
+  try {
+    if (isMySQL) {
+      const columns = await query("SHOW COLUMNS FROM users LIKE 'is_verified'");
+      if (columns.length === 0) {
+        await query("ALTER TABLE users ADD COLUMN is_verified TINYINT DEFAULT 0");
+        await query("ALTER TABLE users ADD COLUMN verification_code VARCHAR(50) NULL");
+        console.log("🛠️ MySQL database migrated: Added verification columns to users.");
+      }
+    } else {
+      const pragma = await query("PRAGMA table_info(users)");
+      const hasVerified = pragma.some(col => col.name === 'is_verified');
+      if (!hasVerified) {
+        await query("ALTER TABLE users ADD COLUMN is_verified TINYINT DEFAULT 0");
+        await query("ALTER TABLE users ADD COLUMN verification_code VARCHAR(50) NULL");
+        console.log("🛠️ SQLite database migrated: Added verification columns to users.");
+      }
+    }
+  } catch (err) {
+    console.warn("⚠️ Migration warning:", err.message);
+  }
 
   // 2. Projects Table
   await query(`
@@ -347,11 +371,11 @@ async function createTables() {
     const vfxPassword = await bcrypt.hash('vfx123', 10);
     const pmPassword = await bcrypt.hash('pm123', 10);
 
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Admin User', 'hemanandab8ags13010042@gmail.com', adminPassword, 'admin']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Client User', 'hemu29799@gmail.com', clientPassword, 'client']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Editor User', 'hemu36586@gmail.com', editorPassword, 'editor']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['VFX Artist User', 'jaswanthben87@gmail.com', vfxPassword, 'vfx_artist']);
-    await query('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)', ['Production Manager User', 'boreddymaheswarareddy999@gmail.com', pmPassword, 'pm']);
+    await query('INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, 1)', ['Admin User', 'hemanandab8ags13010042@gmail.com', adminPassword, 'admin']);
+    await query('INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, 1)', ['Client User', 'hemu29799@gmail.com', clientPassword, 'client']);
+    await query('INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, 1)', ['Editor User', 'hemu36586@gmail.com', editorPassword, 'editor']);
+    await query('INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, 1)', ['VFX Artist User', 'jaswanthben87@gmail.com', vfxPassword, 'vfx_artist']);
+    await query('INSERT INTO users (name, email, password, role, is_verified) VALUES (?, ?, ?, ?, 1)', ['Production Manager User', 'boreddymaheswarareddy999@gmail.com', pmPassword, 'pm']);
 
     console.log('👤 Standard developer accounts seeded (e.g., admin: hemanandab8ags13010042@gmail.com / admin123).');
   }

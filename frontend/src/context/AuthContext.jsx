@@ -38,6 +38,12 @@ export const AuthProvider = ({ children }) => {
       return data.user;
     } catch (err) {
       setLoading(false);
+      if (err.response?.status === 403 && err.response?.data?.error === 'unverified') {
+        const customErr = new Error('unverified');
+        customErr.email = err.response.data.email;
+        setError('Email verification required.');
+        throw customErr;
+      }
       const msg = err.response?.data?.error || 'Login failed. Please check credentials.';
       setError(msg);
       throw new Error(msg);
@@ -49,11 +55,8 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const data = await authService.register(name, email, password, role);
-      localStorage.setItem('token', data.token);
-      setToken(data.token);
-      setUser(data.user);
       setLoading(false);
-      return data.user;
+      return data;
     } catch (err) {
       setLoading(false);
       const msg = err.response?.data?.error || 'Registration failed.';
@@ -62,15 +65,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const verifyOTP = async (email, code) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await authService.verifyOTP(email, code);
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      setLoading(false);
+      return data.user;
+    } catch (err) {
+      setLoading(false);
+      const msg = err.response?.data?.error || 'Verification failed.';
+      setError(msg);
+      throw new Error(msg);
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('digiquest_chat_history');
+    localStorage.removeItem('digiquest_chat_open');
     setToken(null);
     setUser(null);
     setError(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, error, login, register, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, token, loading, error, login, register, verifyOTP, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );

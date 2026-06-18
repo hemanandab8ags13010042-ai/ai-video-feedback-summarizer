@@ -25,19 +25,34 @@ export default function Sidebar() {
 
   const [chatMessage, setChatMessage] = useState('');
   const [chatHistory, setChatHistory] = useState(() => {
-    const saved = localStorage.getItem('digiquest_chat_history');
+    return [
+      { role: 'assistant', content: `Hi there! I'm your DigiQuest Assistant. Ask me anything about your video feedback, revisions, or project statuses!` }
+    ];
+  });
+  const [chatLoading, setChatLoading] = useState(false);
+
+  // Load user-specific chat history when user changes
+  useEffect(() => {
+    if (!user) {
+      setChatHistory([
+        { role: 'assistant', content: `Hi there! I'm your DigiQuest Assistant. Ask me anything about your video feedback, revisions, or project statuses!` }
+      ]);
+      return;
+    }
+    const userKey = `digiquest_chat_history_${user.id}`;
+    const saved = localStorage.getItem(userKey);
     if (saved) {
       try {
-        return JSON.parse(saved);
+        setChatHistory(JSON.parse(saved));
+        return;
       } catch (e) {
         // fallback
       }
     }
-    return [
-      { role: 'assistant', content: `Hi ${user?.name || 'there'}! I'm your DigiQuest Assistant. Ask me anything about your video feedback, revisions, or project statuses!` }
-    ];
-  });
-  const [chatLoading, setChatLoading] = useState(false);
+    setChatHistory([
+      { role: 'assistant', content: `Hi ${user.name || 'there'}! I'm your DigiQuest Assistant. Ask me anything about your video feedback, revisions, or project statuses!` }
+    ]);
+  }, [user]);
 
   // Sync open state to localStorage
   useEffect(() => {
@@ -49,9 +64,12 @@ export default function Sidebar() {
 
   // Sync chat history to localStorage
   useEffect(() => {
-    localStorage.setItem('digiquest_chat_history', JSON.stringify(chatHistory));
+    if (user) {
+      const userKey = `digiquest_chat_history_${user.id}`;
+      localStorage.setItem(userKey, JSON.stringify(chatHistory));
+    }
     setTimeout(scrollToBottom, 50);
-  }, [chatHistory]);
+  }, [chatHistory, user]);
 
   // Window event listeners for global toggle/open controls
   useEffect(() => {

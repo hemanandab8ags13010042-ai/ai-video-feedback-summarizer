@@ -105,6 +105,10 @@ export default function App() {
               } 
             />
 
+            {/* Email link aliases — so quick links in emails land on the right page */}
+            <Route path="/projects" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/tasks" element={<Navigate to="/kanban" replace />} />
+
             {/* Fallback routing */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
