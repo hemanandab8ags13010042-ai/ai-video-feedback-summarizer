@@ -22,7 +22,9 @@ async function register(req, res) {
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const validRole = role || 'client'; // default role is client
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const aiService = require('../services/aiService');
+    const verificationCode = await aiService.generateOTPUsingAI();
 
     const result = await db.query(
       'INSERT INTO users (name, email, password, role, is_verified, verification_code) VALUES (?, ?, ?, ?, 0, ?)',
@@ -148,8 +150,7 @@ async function verifyOTP(req, res) {
       return res.status(400).json({ error: 'Account is already verified. Please log in.' });
     }
 
-    const isMasterOTP = code.trim() === '999999';
-    if (!isMasterOTP && (!user.verification_code || user.verification_code !== code.trim())) {
+    if (!user.verification_code || user.verification_code !== code.trim()) {
       return res.status(400).json({ error: 'Invalid verification code.' });
     }
 
@@ -246,8 +247,9 @@ async function resendOTP(req, res) {
       return res.status(400).json({ error: 'Account is already verified. Please log in.' });
     }
 
-    // Generate new OTP code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate new OTP code using AI
+    const aiService = require('../services/aiService');
+    const verificationCode = await aiService.generateOTPUsingAI();
     await db.query('UPDATE users SET verification_code = ? WHERE id = ?', [verificationCode, user.id]);
 
     // Send OTP email (non-blocking)

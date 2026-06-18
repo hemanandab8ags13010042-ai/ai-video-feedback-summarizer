@@ -110,9 +110,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       if (err.message === 'unverified') {
-        setVerifyEmail(err.email || email);
-        setShowVerify(true);
-        setVerifySuccessMsg('Email verification is required. A code has been sent to your email.');
+        setFormError('Your account is not verified yet. Please complete the verification using the OTP code sent to your email during sign up.');
       } else {
         setFormError(err.message || 'Operation failed.');
       }
