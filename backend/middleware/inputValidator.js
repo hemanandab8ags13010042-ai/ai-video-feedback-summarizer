@@ -67,32 +67,6 @@ const validateLogin = [
   handleValidationErrors
 ];
 
-/**
- * Validators for OTP Verification
- */
-const validateVerifyOTP = [
-  body('email')
-    .trim()
-    .notEmpty().withMessage('Email is required.')
-    .isEmail().withMessage('Please provide a valid email address.')
-    .normalizeEmail(),
-  body('code')
-    .trim()
-    .notEmpty().withMessage('Verification code is required.'),
-  handleValidationErrors
-];
-
-/**
- * Validators for OTP Resend
- */
-const validateResendOTP = [
-  body('email')
-    .trim()
-    .notEmpty().withMessage('Email is required.')
-    .isEmail().withMessage('Please provide a valid email address.')
-    .normalizeEmail(),
-  handleValidationErrors
-];
 
 /**
  * Validators for project creation
@@ -232,8 +206,6 @@ function sanitizeAllStrings(req, res, next) {
 module.exports = {
   validateRegister,
   validateLogin,
-  validateVerifyOTP,
-  validateResendOTP,
   validateProjectCreate,
   validateProjectUpdate,
   validateTaskCreate,

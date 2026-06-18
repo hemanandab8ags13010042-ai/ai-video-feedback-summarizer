@@ -6,7 +6,7 @@ import { Video, ShieldCheck, Mail, Lock, User, PlusCircle, ArrowRight, Sun, Moon
 import { authService } from '../services/api';
 
 export default function LoginPage() {
-  const { login, register, verifyOTP, error } = useAuth();
+  const { login, register, error } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -20,13 +20,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [passwordErrors, setPasswordErrors] = useState([]);
-
-  // OTP Verification States
-  const [showVerify, setShowVerify] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verifySuccessMsg, setVerifySuccessMsg] = useState('');
-  const [verifyEmail, setVerifyEmail] = useState('');
-  const [resendLoading, setResendLoading] = useState(false);
 
   // Password strength validation rules
   const validatePassword = (pwd) => {
@@ -92,70 +85,19 @@ export default function LoginPage() {
 
     setLoading(true);
     setFormError('');
-    setVerifySuccessMsg('');
 
     try {
       if (isRegister) {
-        const data = await register(name, email, password, role);
-        setVerifyEmail(email);
-        setShowVerify(true);
-        let msg = data?.message || 'Verification code sent to your email.';
-        if (data?.dev_otp) {
-          msg += ` (Dev Mode Auto-OTP: ${data.dev_otp})`;
-        }
-        setVerifySuccessMsg(msg);
+        await register(name, email, password, role);
+        navigate('/dashboard');
       } else {
         await login(email, password);
         navigate('/dashboard');
       }
     } catch (err) {
-      if (err.message === 'unverified') {
-        setFormError('Your account is not verified yet. Please complete the verification using the OTP code sent to your email during sign up.');
-      } else {
-        setFormError(err.message || 'Operation failed.');
-      }
+      setFormError(err.message || 'Operation failed.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e) => {
-    e.preventDefault();
-    if (!verificationCode) {
-      setFormError('Please enter the 6-digit verification code.');
-      return;
-    }
-
-    setLoading(true);
-    setFormError('');
-    setVerifySuccessMsg('');
-
-    try {
-      await verifyOTP(verifyEmail, verificationCode);
-      navigate('/dashboard');
-    } catch (err) {
-      setFormError(err.message || 'Verification failed. Please check the code.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOTP = async () => {
-    setResendLoading(true);
-    setFormError('');
-    setVerifySuccessMsg('');
-
-    try {
-      const data = await authService.resendOTP(verifyEmail);
-      let msg = data?.message || 'Verification code resent successfully.';
-      if (data?.dev_otp) {
-        msg += ` (Dev Mode Auto-OTP: ${data.dev_otp})`;
-      }
-      setVerifySuccessMsg(msg);
-    } catch (err) {
-      setFormError(err.response?.data?.error || err.message || 'Failed to resend verification code.');
-    } finally {
-      setResendLoading(false);
     }
   };
 
@@ -204,81 +146,7 @@ export default function LoginPage() {
         <div className={`p-8 rounded-2xl border ${
           isDark ? 'bg-[#161D30] border-slate-800 shadow-2xl' : 'bg-white border-slate-200 shadow-md'
         }`}>
-          {showVerify ? (
-            <>
-              <h2 className="text-2xl font-extrabold mb-2">
-                Verify Your Email
-              </h2>
-              <p className="text-xs text-slate-500 mb-6">
-                Enter the 6-digit verification code sent to <strong className="text-violet-400">{verifyEmail}</strong>.
-              </p>
-
-              {verifySuccessMsg && (
-                <div className="mb-4 p-3 rounded-lg text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">
-                  {verifySuccessMsg}
-                </div>
-              )}
-
-              {formError && (
-                <div className="mb-4 p-3 rounded-lg text-xs bg-red-500/10 border border-red-500/30 text-red-500 font-medium">
-                  {formError}
-                </div>
-              )}
-
-              <form onSubmit={handleVerifyOTP} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">6-Digit Verification Code</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
-                      <KeyRound className="w-4 h-4" />
-                    </span>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      required
-                      value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
-                      placeholder="e.g. 123456"
-                      className={`w-full pl-10 pr-4 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-1 transition-colors ${
-                        isDark ? 'bg-[#0B0F19] border-slate-800 focus:border-violet-500 focus:ring-violet-500' : 'bg-slate-50 border-slate-200 focus:border-violet-500 focus:ring-violet-500'
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 rounded-lg font-semibold bg-violet-600 hover:bg-violet-700 text-white flex items-center justify-center gap-2 shadow-lg shadow-violet-500/20 transition-colors mt-2"
-                >
-                  {loading ? 'Verifying...' : 'Verify & Sign In'}
-                  <ArrowRight className="w-4.5 h-4.5" />
-                </button>
-              </form>
-
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-                <button
-                  onClick={handleResendOTP}
-                  disabled={resendLoading}
-                  className="text-violet-400 hover:underline font-medium disabled:opacity-50"
-                >
-                  {resendLoading ? 'Resending...' : "Didn't receive a code? Resend"}
-                </button>
-
-                <button
-                  onClick={() => {
-                    setShowVerify(false);
-                    setFormError('');
-                    setVerifySuccessMsg('');
-                  }}
-                  className="text-slate-400 hover:underline font-medium"
-                >
-                  Back to Sign In
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
+          <>
               <h2 className="text-2xl font-extrabold mb-2">
                 {isRegister ? 'Create Account' : 'Welcome Back'}
               </h2>
@@ -430,7 +298,6 @@ export default function LoginPage() {
                 </div>
               </div>
             </>
-          )}
         </div>
       </div>
 
