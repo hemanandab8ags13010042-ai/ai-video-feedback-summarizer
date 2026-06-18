@@ -131,6 +131,7 @@ export default function Sidebar() {
   const menuItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'pm', 'client', 'editor', 'vfx_artist'] },
     { label: 'Video Manager', path: '/videos', icon: Video, roles: ['admin', 'pm'] },
+    { label: 'Clients', path: '/clients', icon: UserCheck, roles: ['admin', 'pm'] },
     { label: 'Kanban Board', path: '/kanban', icon: Kanban, roles: ['admin', 'pm', 'editor', 'vfx_artist'] },
     { label: 'Feedback History', path: '/history', icon: History, roles: ['admin', 'pm', 'client', 'editor', 'vfx_artist'] },
     { label: 'Reports', path: '/reports', icon: BarChart3, roles: ['admin', 'pm'] },

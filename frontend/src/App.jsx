@@ -13,6 +13,7 @@ import HistoryPage from './pages/HistoryPage';
 import ReportsPage from './pages/ReportsPage';
 import AdminVideos from './pages/AdminVideos';
 import VideoReview from './pages/VideoReview';
+import ClientsPage from './pages/ClientsPage';
 
 // Simple Route Protection wrapper
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -93,6 +94,14 @@ export default function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin', 'pm']}>
                   <AdminVideos />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/clients" 
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'pm']}>
+                  <ClientsPage />
                 </ProtectedRoute>
               } 
             />

@@ -157,10 +157,89 @@ async function getAllUsers(req, res) {
   }
 }
 
+/**
+ * Update details of a user
+ */
+async function updateUser(req, res) {
+  const { id } = req.params;
+  const { name, email, role } = req.body;
+
+  // Authorization check: Only admin or pm can edit
+  if (req.user.role !== 'admin' && req.user.role !== 'pm') {
+    return res.status(403).json({ error: 'Permission denied. Only Admins and Production Managers can update users.' });
+  }
+
+  if (!name || !email || !role) {
+    return res.status(400).json({ error: 'Name, email, and role are required.' });
+  }
+
+  try {
+    // Check if the user exists
+    const users = await db.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Check if new email is already taken by someone else
+    const emailCheck = await db.query('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
+    if (emailCheck.length > 0) {
+      return res.status(400).json({ error: 'Email is already registered to another account.' });
+    }
+
+    await db.query(
+      'UPDATE users SET name = ?, email = ?, role = ? WHERE id = ?',
+      [name, email, role, id]
+    );
+
+    res.json({ message: 'User updated successfully.' });
+  } catch (err) {
+    console.error('Update User Error:', err);
+    res.status(500).json({ error: `Failed to update user: ${err.message}` });
+  }
+}
+
+/**
+ * Delete a user
+ */
+async function deleteUser(req, res) {
+  const { id } = req.params;
+
+  // Authorization check: Only admin or pm can delete
+  if (req.user.role !== 'admin' && req.user.role !== 'pm') {
+    return res.status(403).json({ error: 'Permission denied. Only Admins and Production Managers can delete users.' });
+  }
+
+  // Prevent users from deleting themselves
+  if (parseInt(id) === req.user.id) {
+    return res.status(400).json({ error: 'You cannot delete your own account.' });
+  }
+
+  try {
+    // Check if user exists
+    const users = await db.query('SELECT id FROM users WHERE id = ?', [id]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Clean up notifications first
+    await db.query('DELETE FROM notifications WHERE user_id = ?', [id]);
+
+    // Delete the user
+    await db.query('DELETE FROM users WHERE id = ?', [id]);
+
+    res.json({ message: 'User deleted successfully.' });
+  } catch (err) {
+    console.error('Delete User Error:', err);
+    res.status(500).json({ error: `Failed to delete user: ${err.message}` });
+  }
+}
+
 module.exports = {
   register,
   login,
   getMe,
-  getAllUsers
+  getAllUsers,
+  updateUser,
+  deleteUser
 };
 

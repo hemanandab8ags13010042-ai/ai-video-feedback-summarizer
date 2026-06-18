@@ -47,6 +47,14 @@ export const authService = {
   getUsers: async () => {
     const res = await api.get('/auth/users');
     return res.data;
+  },
+  updateUser: async (id, userData) => {
+    const res = await api.put(`/auth/users/${id}`, userData);
+    return res.data;
+  },
+  deleteUser: async (id) => {
+    const res = await api.delete(`/auth/users/${id}`);
+    return res.data;
   }
 };
 

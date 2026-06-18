@@ -14,5 +14,7 @@ router.post('/login', authLimiter, validateLogin, authController.login);
 // Protected routes
 router.get('/me', authenticateToken, authController.getMe);
 router.get('/users', authenticateToken, authController.getAllUsers);
+router.put('/users/:id', authenticateToken, authController.updateUser);
+router.delete('/users/:id', authenticateToken, authController.deleteUser);
 
 module.exports = router;
