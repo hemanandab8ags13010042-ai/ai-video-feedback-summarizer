@@ -886,47 +886,13 @@ ${JSON.stringify(comments.map(c => ({ timestamp_seconds: c.timestamp_seconds, co
 }
 
 /**
- * Generate a secure 6-digit numeric OTP code using Gemini AI (with a secure crypto fallback)
+ * Generate a secure 6-digit numeric OTP code using a cryptographically secure pseudo-random number generator
  */
 async function generateOTPUsingAI() {
-  if (geminiClient) {
-    try {
-      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
-      const prompt = 'Generate a secure, random 6-digit numeric verification code (OTP) for account signup. Return ONLY the 6 digits and absolutely no other text, explanation, or markdown.';
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().trim();
-      const code = text.replace(/\D/g, ''); // strip any non-digits
-      if (code.length === 6) {
-        console.log(`🤖 AI (Gemini) Generated OTP Code successfully: ${code}`);
-        return code;
-      }
-    } catch (err) {
-      console.warn('⚠️ Gemini AI OTP generation failed, falling back to OpenAI/Crypto:', err.message);
-    }
-  }
-
-  // Fallback to OpenAI
-  if (openaiClient) {
-    try {
-      const response = await openaiClient.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: 'Generate a secure, random 6-digit numeric verification code (OTP). Output only the 6 digits.' }]
-      });
-      const code = response.choices[0].message.content.trim().replace(/\D/g, '');
-      if (code.length === 6) {
-        console.log(`🤖 AI (OpenAI) Generated OTP Code successfully: ${code}`);
-        return code;
-      }
-    } catch (err) {
-      console.warn('⚠️ OpenAI OTP generation failed, falling back to Crypto:', err.message);
-    }
-  }
-
-  // Cryptographically secure pseudo-random fallback
   const crypto = require('crypto');
-  const fallbackCode = crypto.randomInt(100000, 999999).toString();
-  console.log(`🎲 Crypto-Random Generated OTP Code (Fallback): ${fallbackCode}`);
-  return fallbackCode;
+  const code = crypto.randomInt(100000, 999999).toString();
+  console.log(`🔑 Generated secure OTP Code: ${code}`);
+  return code;
 }
 
 module.exports = {
