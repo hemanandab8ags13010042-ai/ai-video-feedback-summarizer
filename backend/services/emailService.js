@@ -8,10 +8,14 @@ async function initTransporter() {
 
   if (useSMTP) {
     try {
+      const isGmail = (process.env.SMTP_HOST || '').toLowerCase().includes('gmail');
+      const defaultPort = isGmail ? 465 : 587;
+      const defaultSecure = isGmail ? true : false;
+
       transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === 'true',
+        port: parseInt(process.env.SMTP_PORT) || defaultPort,
+        secure: process.env.SMTP_PORT ? (process.env.SMTP_SECURE === 'true') : defaultSecure,
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
@@ -221,8 +225,9 @@ async function sendNotificationEmail(
     badgeColor
   );
 
+  const defaultFrom = process.env.SMTP_FROM || (process.env.SMTP_USER ? `"DigiQuest Studio" <${process.env.SMTP_USER}>` : '"DigiQuest Studio Alerts" <alerts@digiquest.studio>');
   const mailOptions = {
-    from: process.env.SMTP_FROM || '"DigiQuest Studio Alerts" <alerts@digiquest.studio>',
+    from: defaultFrom,
     to: toEmail,
     subject: subject,
     text: textContent,
