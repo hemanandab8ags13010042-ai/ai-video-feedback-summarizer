@@ -238,77 +238,94 @@ async function deleteUser(req, res) {
  * Diagnostics endpoint to verify SMTP credentials and connect.
  */
 async function testSMTPConnection(req, res) {
-  const nodemailer = require('nodemailer');
-  
-  const host = req.query.host || process.env.SMTP_HOST;
-  const port = req.query.port || process.env.SMTP_PORT;
-  const secure = req.query.secure || process.env.SMTP_SECURE;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const emailService = require('../services/emailService');
+  const activeProvider = emailService.getActiveProvider();
 
-  const targetRecipient = req.query.to || user;
+  const user = process.env.SMTP_USER;
+  const targetRecipient = req.query.to || user || 'hemanandab8ags13010042@gmail.com';
   const targetSender = req.query.from || process.env.SMTP_FROM || '"DigiQuest Studio Alerts" <alerts@digiquest.studio>';
 
-  const isGmail = (host || '').toLowerCase().includes('gmail');
-  const defaultPort = isGmail ? 465 : 587;
-  const defaultSecure = isGmail ? true : false;
-
   const diagnostics = {
-    smtp_configured: !!(host && user && pass),
-    host: host || 'MISSING',
-    port: port || 'MISSING',
-    secure: secure || 'MISSING',
-    resolved_port: parseInt(port) || defaultPort,
-    resolved_secure: port ? (secure === 'true') : defaultSecure,
-    user: user || 'MISSING',
+    active_provider: activeProvider,
+    smtp_configured: !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+    resend_configured: !!process.env.RESEND_API_KEY,
+    brevo_configured: !!process.env.BREVO_API_KEY,
     target_recipient: targetRecipient,
     target_sender: targetSender,
-    pass_length: pass ? pass.length : 0,
-    pass_masked: pass ? (pass.length > 4 ? pass.substring(0, 2) + '****' + pass.substring(pass.length - 2) : 'PRESENT_BUT_SHORT') : 'MISSING',
     connection_verified: false,
     email_dispatched: false,
+    messageId: null,
     error: null
   };
 
-  if (!diagnostics.smtp_configured) {
-    return res.status(400).json({ 
-      error: 'SMTP credentials missing from environment variables.', 
-      diagnostics 
-    });
-  }
-
-  const config = {
-    host,
-    port: parseInt(port) || defaultPort,
-    secure: port ? (secure === 'true') : defaultSecure,
-    auth: {
-      user,
-      pass
-    },
-    family: 4, // Force IPv4 to prevent IPv6 timeout issues on Render
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 20000
-  };
-
   try {
-    const testTransporter = nodemailer.createTransport(config);
-    
-    // 1. Verify connection
-    await testTransporter.verify();
-    diagnostics.connection_verified = true;
+    if (activeProvider === 'resend') {
+      const resendRes = await emailService.sendResendEmail(process.env.RESEND_API_KEY, {
+        to: targetRecipient,
+        subject: '🎬 DigiQuest Studio Resend API Diagnostics Test',
+        html: `<p>Resend API diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}</p>`,
+        text: `Resend API diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}`
+      });
+      diagnostics.connection_verified = true;
+      diagnostics.email_dispatched = true;
+      diagnostics.messageId = resendRes.id;
+    } else if (activeProvider === 'brevo') {
+      const brevoRes = await emailService.sendBrevoEmail(process.env.BREVO_API_KEY, {
+        to: targetRecipient,
+        subject: '🎬 DigiQuest Studio Brevo API Diagnostics Test',
+        html: `<p>Brevo API diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}</p>`,
+        text: `Brevo API diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}`
+      });
+      diagnostics.connection_verified = true;
+      diagnostics.email_dispatched = true;
+      diagnostics.messageId = brevoRes.messageId;
+    } else if (activeProvider === 'smtp') {
+      const nodemailer = require('nodemailer');
+      const host = req.query.host || process.env.SMTP_HOST;
+      const port = req.query.port || process.env.SMTP_PORT;
+      const secure = req.query.secure || process.env.SMTP_SECURE;
+      const pass = process.env.SMTP_PASS;
 
-    // 2. Try sending test email
-    const mailOptions = {
-      from: targetSender,
-      to: targetRecipient,
-      subject: '🎬 DigiQuest Studio SMTP Diagnostics Test',
-      text: `SMTP Connection diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}`
-    };
+      const isGmail = (host || '').toLowerCase().includes('gmail');
+      const defaultPort = isGmail ? 465 : 587;
+      const defaultSecure = isGmail ? true : false;
 
-    const info = await testTransporter.sendMail(mailOptions);
-    diagnostics.email_dispatched = true;
-    diagnostics.messageId = info.messageId;
+      // Populate SMTP-specific diagnostics keys
+      diagnostics.smtp_host = host;
+      diagnostics.smtp_port = port;
+      diagnostics.smtp_secure = secure;
+
+      const config = {
+        host,
+        port: parseInt(port) || defaultPort,
+        secure: port ? (secure === 'true') : defaultSecure,
+        auth: {
+          user,
+          pass
+        },
+        family: 4,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000
+      };
+
+      const testTransporter = nodemailer.createTransport(config);
+      await testTransporter.verify();
+      diagnostics.connection_verified = true;
+
+      const mailOptions = {
+        from: targetSender,
+        to: targetRecipient,
+        subject: '🎬 DigiQuest Studio SMTP Diagnostics Test',
+        text: `SMTP Connection diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}`
+      };
+
+      const info = await testTransporter.sendMail(mailOptions);
+      diagnostics.email_dispatched = true;
+      diagnostics.messageId = info.messageId;
+    } else {
+      throw new Error('No email provider is configured. Please set RESEND_API_KEY, BREVO_API_KEY, or SMTP environment variables.');
+    }
 
     // Verify Cloudinary configuration
     const cloudinaryDiagnostics = {
@@ -348,12 +365,12 @@ async function testSMTPConnection(req, res) {
     }
 
     res.json({ 
-      message: 'SMTP & Storage Diagnostics Completed Successfully!', 
+      message: 'Diagnostics Completed Successfully!', 
       diagnostics,
       cloudinary: cloudinaryDiagnostics
     });
   } catch (err) {
-    console.error('SMTP Diagnostics Failure:', err);
+    console.error('Diagnostics Failure:', err);
     diagnostics.error = err.message;
     diagnostics.error_stack = err.stack;
 
@@ -394,7 +411,7 @@ async function testSMTPConnection(req, res) {
     }
 
     res.status(500).json({ 
-      error: `SMTP Diagnostics Failed: ${err.message}`, 
+      error: `Diagnostics Failed: ${err.message}`, 
       diagnostics,
       cloudinary: cloudinaryDiagnostics
     });

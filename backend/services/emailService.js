@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const https = require('https');
 
 let transporter = null;
 
@@ -203,6 +204,159 @@ function getBrandedTemplate(
  * @param {string} badgeColor        Optional badge background colour
  * @param {Array}  attachments       Nodemailer attachments array (for PDFs etc.)
  */
+async function sendResendEmail(apiKey, { to, subject, html, text, attachments = [] }) {
+  return new Promise((resolve, reject) => {
+    const fromAddress = process.env.RESEND_FROM || 'DigiQuest Studio <onboarding@resend.dev>';
+
+    const resendAttachments = attachments.map(att => {
+      let contentBase64 = '';
+      if (att.content) {
+        contentBase64 = Buffer.isBuffer(att.content) 
+          ? att.content.toString('base64') 
+          : Buffer.from(att.content).toString('base64');
+      }
+      return {
+        filename: att.filename,
+        content: contentBase64 || undefined,
+        path: att.path || undefined
+      };
+    }).filter(att => att.content || att.path);
+
+    const payload = {
+      from: fromAddress,
+      to: [to],
+      subject: subject,
+      html: html,
+      text: text
+    };
+
+    if (resendAttachments.length > 0) {
+      payload.attachments = resendAttachments;
+    }
+
+    const data = JSON.stringify(payload);
+
+    const options = {
+      hostname: 'api.resend.com',
+      port: 443,
+      path: '/emails',
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data)
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            resolve({ id: body });
+          }
+        } else {
+          reject(new Error(`Resend API returned status ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(err));
+    req.write(data);
+    req.end();
+  });
+}
+
+async function sendBrevoEmail(apiKey, { to, subject, html, text, attachments = [] }) {
+  return new Promise((resolve, reject) => {
+    const fromStr = process.env.SMTP_FROM || (process.env.SMTP_USER ? `"DigiQuest Studio" <${process.env.SMTP_USER}>` : '"DigiQuest Studio Alerts" <alerts@digiquest.studio>');
+    
+    let senderObj = { name: 'DigiQuest Studio', email: 'alerts@digiquest.studio' };
+    if (fromStr) {
+      const match = fromStr.match(/^(?:"?([^"]*)"?\s)?(?:<(.+)>)$/);
+      if (match) {
+        senderObj = { name: match[1]?.trim() || 'DigiQuest Studio', email: match[2]?.trim() };
+      } else if (fromStr.includes('@')) {
+        senderObj = { name: 'DigiQuest Studio', email: fromStr.trim() };
+      }
+    }
+
+    const brevoAttachments = attachments.map(att => {
+      let contentBase64 = '';
+      if (att.content) {
+        contentBase64 = Buffer.isBuffer(att.content) 
+          ? att.content.toString('base64') 
+          : Buffer.from(att.content).toString('base64');
+      }
+      return {
+        name: att.filename,
+        content: contentBase64 || undefined,
+        url: att.path || undefined
+      };
+    }).filter(att => att.content || att.url);
+
+    const payload = {
+      sender: senderObj,
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: html,
+      textContent: text
+    };
+
+    if (brevoAttachments.length > 0) {
+      payload.attachment = brevoAttachments;
+    }
+
+    const data = JSON.stringify(payload);
+
+    const options = {
+      hostname: 'api.brevo.com',
+      port: 443,
+      path: '/v3/smtp/email',
+      method: 'POST',
+      headers: {
+        'api-key': apiKey,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(data)
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', (chunk) => body += chunk);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(body));
+          } catch (e) {
+            resolve({ id: body });
+          }
+        } else {
+          reject(new Error(`Brevo API returned status ${res.statusCode}: ${body}`));
+        }
+      });
+    });
+
+    req.on('error', (err) => reject(err));
+    req.write(data);
+    req.end();
+  });
+}
+
+function getActiveProvider() {
+  if (process.env.RESEND_API_KEY) {
+    return 'resend';
+  } else if (process.env.BREVO_API_KEY) {
+    return 'brevo';
+  } else if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return 'smtp';
+  }
+  return 'mock';
+}
+
 async function sendNotificationEmail(
   toEmail,
   subject,
@@ -213,10 +367,6 @@ async function sendNotificationEmail(
   badgeColor = '#7c3aed',
   attachments = []
 ) {
-  if (transporter === null) {
-    await initTransporter();
-  }
-
   const htmlContent = getBrandedTemplate(
     subject,
     textContent,
@@ -226,38 +376,76 @@ async function sendNotificationEmail(
     badgeColor
   );
 
-  const defaultFrom = process.env.SMTP_FROM || (process.env.SMTP_USER ? `"DigiQuest Studio" <${process.env.SMTP_USER}>` : '"DigiQuest Studio Alerts" <alerts@digiquest.studio>');
-  const mailOptions = {
-    from: defaultFrom,
-    to: toEmail,
-    subject: subject,
-    text: textContent,
-    html: htmlContent,
-    attachments: attachments
-  };
+  const provider = getActiveProvider();
 
-  if (transporter) {
+  if (provider === 'resend') {
     try {
-      const info = await transporter.sendMail(mailOptions);
-      console.log(`✉️  Email dispatched to ${toEmail} successfully (Message ID: ${info.messageId})`);
+      const info = await sendResendEmail(process.env.RESEND_API_KEY, {
+        to: toEmail,
+        subject: subject,
+        html: htmlContent,
+        text: textContent,
+        attachments: attachments
+      });
+      console.log(`✉️ Email dispatched to ${toEmail} successfully via Resend API (ID: ${info.id || 'N/A'})`);
       return info;
     } catch (err) {
-      console.error(`❌ Failed to send email to ${toEmail}:`, err.message);
+      console.error(`❌ Failed to send email to ${toEmail} via Resend API:`, err.message);
     }
-  } else {
-    console.log('\n=================== ✉️ MOCK EMAIL DISPATCH ===================');
-    console.log(`To:      ${toEmail}`);
-    console.log(`Subject: ${subject}`);
-    console.log(`Body:    ${textContent}`);
-    if (attachments && attachments.length > 0) {
-      console.log(`Attachments: [${attachments.map(a => a.filename).join(', ')}]`);
+  } else if (provider === 'brevo') {
+    try {
+      const info = await sendBrevoEmail(process.env.BREVO_API_KEY, {
+        to: toEmail,
+        subject: subject,
+        html: htmlContent,
+        text: textContent,
+        attachments: attachments
+      });
+      console.log(`✉️ Email dispatched to ${toEmail} successfully via Brevo API (Message ID: ${info.messageId || 'N/A'})`);
+      return info;
+    } catch (err) {
+      console.error(`❌ Failed to send email to ${toEmail} via Brevo API:`, err.message);
     }
-    console.log('===============================================================\n');
-    return { mockSent: true };
+  } else if (provider === 'smtp') {
+    if (transporter === null) {
+      await initTransporter();
+    }
+    if (transporter) {
+      const defaultFrom = process.env.SMTP_FROM || (process.env.SMTP_USER ? `"DigiQuest Studio" <${process.env.SMTP_USER}>` : '"DigiQuest Studio Alerts" <alerts@digiquest.studio>');
+      const mailOptions = {
+        from: defaultFrom,
+        to: toEmail,
+        subject: subject,
+        text: textContent,
+        html: htmlContent,
+        attachments: attachments
+      };
+      try {
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✉️  Email dispatched to ${toEmail} successfully via SMTP (Message ID: ${info.messageId})`);
+        return info;
+      } catch (err) {
+        console.error(`❌ Failed to send email to ${toEmail} via SMTP:`, err.message);
+      }
+    }
   }
+
+  // Fallback to mock log if disabled or failed
+  console.log('\n=================== ✉️ MOCK EMAIL DISPATCH ===================');
+  console.log(`To:      ${toEmail}`);
+  console.log(`Subject: ${subject}`);
+  console.log(`Body:    ${textContent}`);
+  if (attachments && attachments.length > 0) {
+    console.log(`Attachments: [${attachments.map(a => a.filename).join(', ')}]`);
+  }
+  console.log('===============================================================\n');
+  return { mockSent: true };
 }
 
 module.exports = {
   sendNotificationEmail,
-  getBrandedTemplate
+  getBrandedTemplate,
+  getActiveProvider,
+  sendResendEmail,
+  sendBrevoEmail
 };
