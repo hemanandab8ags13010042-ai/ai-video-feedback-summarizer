@@ -246,12 +246,17 @@ async function testSMTPConnection(req, res) {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
+  const targetRecipient = req.query.to || user;
+  const targetSender = req.query.from || process.env.SMTP_FROM || '"DigiQuest Studio Alerts" <alerts@digiquest.studio>';
+
   const diagnostics = {
     smtp_configured: !!(host && user && pass),
     host: host || 'MISSING',
     port: port || 'MISSING',
     secure: secure || 'MISSING',
     user: user || 'MISSING',
+    target_recipient: targetRecipient,
+    target_sender: targetSender,
     pass_length: pass ? pass.length : 0,
     pass_masked: pass ? (pass.length > 4 ? pass.substring(0, 2) + '****' + pass.substring(pass.length - 2) : 'PRESENT_BUT_SHORT') : 'MISSING',
     connection_verified: false,
@@ -286,12 +291,12 @@ async function testSMTPConnection(req, res) {
     await testTransporter.verify();
     diagnostics.connection_verified = true;
 
-    // 2. Try sending test email to SMTP_USER (sender themselves)
+    // 2. Try sending test email
     const mailOptions = {
-      from: process.env.SMTP_FROM || `"${user}" <${user}>`,
-      to: user,
+      from: targetSender,
+      to: targetRecipient,
       subject: '🎬 DigiQuest Studio SMTP Diagnostics Test',
-      text: `SMTP Connection diagnostics check. This confirms secure email dispatch is fully operational from the deployed environment.`
+      text: `SMTP Connection diagnostics check. Sender: ${targetSender}, Recipient: ${targetRecipient}`
     };
 
     const info = await testTransporter.sendMail(mailOptions);
