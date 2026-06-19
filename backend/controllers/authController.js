@@ -366,6 +366,7 @@ async function testSMTPConnection(req, res) {
 
     res.json({ 
       message: 'Diagnostics Completed Successfully!', 
+      db_type: db.getIsMySQL() ? 'mysql' : 'sqlite',
       diagnostics,
       cloudinary: cloudinaryDiagnostics
     });
@@ -412,6 +413,7 @@ async function testSMTPConnection(req, res) {
 
     res.status(500).json({ 
       error: `Diagnostics Failed: ${err.message}`, 
+      db_type: db.getIsMySQL() ? 'mysql' : 'sqlite',
       diagnostics,
       cloudinary: cloudinaryDiagnostics
     });
