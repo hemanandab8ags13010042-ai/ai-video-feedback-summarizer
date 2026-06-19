@@ -249,11 +249,17 @@ async function testSMTPConnection(req, res) {
   const targetRecipient = req.query.to || user;
   const targetSender = req.query.from || process.env.SMTP_FROM || '"DigiQuest Studio Alerts" <alerts@digiquest.studio>';
 
+  const isGmail = (host || '').toLowerCase().includes('gmail');
+  const defaultPort = isGmail ? 465 : 587;
+  const defaultSecure = isGmail ? true : false;
+
   const diagnostics = {
     smtp_configured: !!(host && user && pass),
     host: host || 'MISSING',
     port: port || 'MISSING',
     secure: secure || 'MISSING',
+    resolved_port: parseInt(port) || defaultPort,
+    resolved_secure: port ? (secure === 'true') : defaultSecure,
     user: user || 'MISSING',
     target_recipient: targetRecipient,
     target_sender: targetSender,
@@ -273,8 +279,8 @@ async function testSMTPConnection(req, res) {
 
   const config = {
     host,
-    port: parseInt(port) || 587,
-    secure: secure === 'true',
+    port: parseInt(port) || defaultPort,
+    secure: port ? (secure === 'true') : defaultSecure,
     auth: {
       user,
       pass
