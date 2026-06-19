@@ -285,9 +285,10 @@ async function testSMTPConnection(req, res) {
       user,
       pass
     },
-    connectionTimeout: 5000,
-    greetingTimeout: 5000,
-    socketTimeout: 5000
+    family: 4, // Force IPv4 to prevent IPv6 timeout issues on Render
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000
   };
 
   try {

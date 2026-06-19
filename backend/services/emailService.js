@@ -20,9 +20,10 @@ async function initTransporter() {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
-        connectionTimeout: 5000, // 5s timeout
-        greetingTimeout: 5000,   // 5s greeting timeout
-        socketTimeout: 10000     // 10s socket timeout
+        family: 4, // Force IPv4 to prevent IPv6 timeout issues on Render
+        connectionTimeout: 15000, // 15s timeout
+        greetingTimeout: 15000,   // 15s greeting timeout
+        socketTimeout: 20000     // 20s socket timeout
       });
       console.log('✉️ SMTP Email Transporter initialized successfully.');
     } catch (err) {
