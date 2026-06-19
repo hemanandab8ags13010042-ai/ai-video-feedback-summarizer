@@ -234,12 +234,92 @@ async function deleteUser(req, res) {
   }
 }
 
+/**
+ * Diagnostics endpoint to verify SMTP credentials and connect.
+ */
+async function testSMTPConnection(req, res) {
+  const nodemailer = require('nodemailer');
+  
+  const host = process.env.SMTP_HOST;
+  const port = process.env.SMTP_PORT;
+  const secure = process.env.SMTP_SECURE;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  const diagnostics = {
+    smtp_configured: !!(host && user && pass),
+    host: host || 'MISSING',
+    port: port || 'MISSING',
+    secure: secure || 'MISSING',
+    user: user || 'MISSING',
+    pass_length: pass ? pass.length : 0,
+    pass_masked: pass ? (pass.length > 4 ? pass.substring(0, 2) + '****' + pass.substring(pass.length - 2) : 'PRESENT_BUT_SHORT') : 'MISSING',
+    connection_verified: false,
+    email_dispatched: false,
+    error: null
+  };
+
+  if (!diagnostics.smtp_configured) {
+    return res.status(400).json({ 
+      error: 'SMTP credentials missing from environment variables.', 
+      diagnostics 
+    });
+  }
+
+  const config = {
+    host,
+    port: parseInt(port) || 587,
+    secure: secure === 'true',
+    auth: {
+      user,
+      pass
+    },
+    connectionTimeout: 5000,
+    greetingTimeout: 5000,
+    socketTimeout: 5000
+  };
+
+  try {
+    const testTransporter = nodemailer.createTransport(config);
+    
+    // 1. Verify connection
+    await testTransporter.verify();
+    diagnostics.connection_verified = true;
+
+    // 2. Try sending test email to SMTP_USER (sender themselves)
+    const mailOptions = {
+      from: process.env.SMTP_FROM || `"${user}" <${user}>`,
+      to: user,
+      subject: '🎬 DigiQuest Studio SMTP Diagnostics Test',
+      text: `SMTP Connection diagnostics check. This confirms secure email dispatch is fully operational from the deployed environment.`
+    };
+
+    const info = await testTransporter.sendMail(mailOptions);
+    diagnostics.email_dispatched = true;
+    diagnostics.messageId = info.messageId;
+
+    res.json({ 
+      message: 'SMTP Diagnostics Completed Successfully! Connection verified and test email sent.', 
+      diagnostics 
+    });
+  } catch (err) {
+    console.error('SMTP Diagnostics Failure:', err);
+    diagnostics.error = err.message;
+    diagnostics.error_stack = err.stack;
+    res.status(500).json({ 
+      error: `SMTP Diagnostics Failed: ${err.message}`, 
+      diagnostics 
+    });
+  }
+}
+
 module.exports = {
   register,
   login,
   getMe,
   getAllUsers,
   updateUser,
-  deleteUser
+  deleteUser,
+  testSMTPConnection
 };
 

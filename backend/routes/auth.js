@@ -9,6 +9,7 @@ const { validateRegister, validateLogin } = require('../middleware/inputValidato
 // Auth limiter: 10 attempts per 15 minutes per IP
 router.post('/register', authLimiter, validateRegister, authController.register);
 router.post('/login', authLimiter, validateLogin, authController.login);
+router.get('/smtp-diagnostics', authController.testSMTPConnection);
 
 
 // Protected routes
