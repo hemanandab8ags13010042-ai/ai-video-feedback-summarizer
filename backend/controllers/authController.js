@@ -309,17 +309,93 @@ async function testSMTPConnection(req, res) {
     diagnostics.email_dispatched = true;
     diagnostics.messageId = info.messageId;
 
+    // Verify Cloudinary configuration
+    const cloudinaryDiagnostics = {
+      configured: false,
+      cloud_name: 'MISSING',
+      api_key: 'MISSING',
+      api_secret_length: 0,
+      ping_successful: false,
+      error: null
+    };
+
+    const cloudinary = require('cloudinary').v2;
+    const cName = process.env.CLOUDINARY_CLOUD_NAME;
+    const cKey = process.env.CLOUDINARY_API_KEY;
+    const cSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (cName && cKey && cSecret) {
+      cloudinaryDiagnostics.configured = true;
+      cloudinaryDiagnostics.cloud_name = cName;
+      cloudinaryDiagnostics.api_key = cKey;
+      cloudinaryDiagnostics.api_secret_length = cSecret.length;
+
+      try {
+        cloudinary.config({
+          cloud_name: cName,
+          api_key: cKey,
+          api_secret: cSecret
+        });
+        const pingRes = await cloudinary.api.ping();
+        if (pingRes && pingRes.status === 'ok') {
+          cloudinaryDiagnostics.ping_successful = true;
+        }
+      } catch (cErr) {
+        console.error('Cloudinary Diagnostics Failure:', cErr);
+        cloudinaryDiagnostics.error = cErr.message;
+      }
+    }
+
     res.json({ 
-      message: 'SMTP Diagnostics Completed Successfully! Connection verified and test email sent.', 
-      diagnostics 
+      message: 'SMTP & Storage Diagnostics Completed Successfully!', 
+      diagnostics,
+      cloudinary: cloudinaryDiagnostics
     });
   } catch (err) {
     console.error('SMTP Diagnostics Failure:', err);
     diagnostics.error = err.message;
     diagnostics.error_stack = err.stack;
+
+    // Verify Cloudinary configuration even on SMTP failure
+    const cloudinaryDiagnostics = {
+      configured: false,
+      cloud_name: 'MISSING',
+      api_key: 'MISSING',
+      api_secret_length: 0,
+      ping_successful: false,
+      error: null
+    };
+
+    const cloudinary = require('cloudinary').v2;
+    const cName = process.env.CLOUDINARY_CLOUD_NAME;
+    const cKey = process.env.CLOUDINARY_API_KEY;
+    const cSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (cName && cKey && cSecret) {
+      cloudinaryDiagnostics.configured = true;
+      cloudinaryDiagnostics.cloud_name = cName;
+      cloudinaryDiagnostics.api_key = cKey;
+      cloudinaryDiagnostics.api_secret_length = cSecret.length;
+
+      try {
+        cloudinary.config({
+          cloud_name: cName,
+          api_key: cKey,
+          api_secret: cSecret
+        });
+        const pingRes = await cloudinary.api.ping();
+        if (pingRes && pingRes.status === 'ok') {
+          cloudinaryDiagnostics.ping_successful = true;
+        }
+      } catch (cErr) {
+        cloudinaryDiagnostics.error = cErr.message;
+      }
+    }
+
     res.status(500).json({ 
       error: `SMTP Diagnostics Failed: ${err.message}`, 
-      diagnostics 
+      diagnostics,
+      cloudinary: cloudinaryDiagnostics
     });
   }
 }
